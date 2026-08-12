@@ -1,0 +1,183 @@
+﻿@page "/counter/{ChartKey}"
+@using DataLayer;
+@using System.Collections.Specialized
+@using System.Data
+@using Newtonsoft.Json
+@inject IJSRuntime JS
+@layout SeatingLayout
+<div style="position: absolute; top: 20px; right: 20px; z-index: 100; background: white; padding: 8px 12px; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.15);">
+    <label style="margin-right: 16px;">
+        <input id="chkrow"  type="checkbox"  @onchange="ToggleRowLabel"/> Show Row Label
+    </label>
+    <label>
+        <input id="chkseat"  type="checkbox"  @onchange="ToggleSeatLabel"/> Show Seat Label
+    </label>
+</div>
+<div id="chart-container"></div>
+        <canvas id="userCanvas" width="2000" height="800"></canvas>
+   
+@* <div class="row" style="padding:20px;text-align:center;">
+    <div class="col-sm-6">
+        <button class="btn btn-primary mt-2" @onclick="BookClick">
+            Book
+        </button>
+
+    </div>
+</div> *@
+ <div id="seatTooltip"
+     style="position:fixed;
+            padding:6px 10px;
+            background:#333;
+            color:#fff;
+            border-radius:5px;
+            display:none;
+            font-size:12px;
+            pointer-events:none;
+            z-index:9999;">
+</div>
+<div id="seatAdjustmentPopup" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5);">
+    <div class="modal-content" style="background-color: #fefefe; margin: 15% auto; border: 1px solid #888; width: 300px; border-radius: 8px;">
+        @* <span class="close" onclick="closeSeatPopup()" style="float: right; font-size: 28px; font-weight: bold; cursor: pointer;">&times;</span> *@
+        @* <h3 id="popupTitle" style="margin-top: 20px;"></h3> *@
+        <div id="popupContent">
+            <p id="categoryInfo" style="margin: 10px 10px;"></p><hr/>
+            <div style="display: flex; align-items: center; justify-content: center; gap: 20px; margin: 10px 10px;">
+                <button id="decreaseSeats" class="btn btn-secondary" style="width: 40px; height: 40px; border-radius: 50%; font-size: 20px; padding: 0;"><i class="fa-solid fa-minus"></i></button>
+                <span id="seatCount" style="font-size: 24px; font-weight: bold; min-width: 40px; text-align: center;">0</span>
+                <button id="increaseSeats" class="btn btn-primary" style="width: 40px; height: 40px; border-radius: 50%; font-size: 20px; padding: 0;"><i class="fa-solid fa-plus"></i></button>
+            </div>
+            @* <div id="maxSeatsMsg" style="color: #666; font-size: 12px; margin-top: 10px;"></div> *@
+            <div style="margin-top: 30px;margin-bottom:10px; text-align: center;">
+                <button id="cancelbtn"  class="btn btn-secondary" style="margin-left: 10px; padding: 5px 10px;">Cancel</button>
+                <button  id="addSeatsBtn" class="btn btn-primary" style="padding: 5px 10px;margin-left:10px;">Confirm</button>
+            </div>
+        </div>
+    </div>
+</div>
+@code {
+    [Parameter]
+    public string ChartKey { get; set; } = "0";
+    public string ChartId { get; set; }
+    public bool ShowRowLabel { get; set; } = false;
+    public bool ShowSeatLabel { get; set; } = false;
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            string json = GetSeatingLayout();
+            string seats = JsonConvert.SerializeObject(getSeats());
+            await JS.InvokeVoidAsync("loadUserChart", json,seats,ChartId);
+            //await JS.InvokeVoidAsync("RenderChart");
+        }
+    }
+    private async Task LoadLayout()
+    {
+        string json = GetSeatingLayout();
+
+        if (!string.IsNullOrWhiteSpace(json))
+        {
+            await JS.InvokeVoidAsync("fabricInterop.loadLayout", "userCanvas", json);
+        }
+        await JS.InvokeVoidAsync("fabricInterop.debugCanvas", "userCanvas");
+    }
+    public string GetSeatingLayout()
+    {
+        cdlChart objChart = new cdlChart();
+        NameValueCollection vncParams = new NameValueCollection();
+        DataSet ds = new DataSet();
+        vncParams.Add("chart_id", "0");
+        vncParams.Add("log_id", "0");
+        vncParams.Add("chart_key", ChartKey);
+        vncParams.Add("option", "C");
+        objChart.GetChartCategory(vncParams, ref ds);
+        if (ds != null)
+        {
+            if (ds.Tables[0].Rows.Count > 0)
+            {
+                DataRow dr = ds.Tables[0].Rows[0];
+                ChartId = dr["chart_id"].ToString();
+                return dr["chart_json"].ToString();
+            }
+        }
+        return "";
+    }
+
+    public async void BookClick()
+    {
+        try
+        {
+            // Get the selected seats from JavaScript
+            var selectedSeats = await JS.InvokeAsync<List<SelectedSeat>>(
+                "fabricInterop.getSelectedSeatsForBooking",
+                "userCanvas" // Replace with your actual canvas ID
+            );
+
+            if (selectedSeats == null || selectedSeats.Count == 0)
+            {
+                // Show message if no seats selected
+                await JS.InvokeVoidAsync("alert", "Please select seats first!");
+                return;
+            }
+
+            // Process the booking - save to database, update status, etc.
+            foreach (var seat in selectedSeats)
+            {
+                // Here you would save to your database
+                // Example:
+                // await SaveBookingToDatabase(seat.Id, seat.Label, seat.CategoryId, etc.);
+                await JS.InvokeVoidAsync("fabricInterop.toggleSeatStatus", "userCanvas", seat);
+
+                Console.WriteLine($"Booking seat: {seat.Id}, Label: {seat.Label}");
+            }
+
+            // Clear the selected seats after booking
+            await JS.InvokeVoidAsync("fabricInterop.clearSelectedSeats", "userCanvas");
+
+            // Show success message
+            await JS.InvokeVoidAsync("alert", $"Successfully booked {selectedSeats.Count} seat(s)!");
+
+            // Optionally, update the UI or refresh data
+            // StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error booking seats: {ex.Message}");
+            await JS.InvokeVoidAsync("alert", "Error booking seats: " + ex.Message);
+        }
+    }
+    public DataSet getSeats()
+    {
+        cdlSeat objSeat = new cdlSeat();
+        NameValueCollection vncParams = new NameValueCollection();
+        DataSet ds = new DataSet();
+        vncParams.Add("chart_id",ChartId);
+        vncParams.Add("seat_name", "0");
+        vncParams.Add("row_name", "0");
+        vncParams.Add("cat_name", "");
+        vncParams.Add("option", "C");
+        objSeat.Getseats(vncParams, ref ds);
+        if(ds != null)
+        {
+            return ds;
+        }
+        return null;
+    }
+    private async Task ToggleRowLabel()
+    {
+        await JS.InvokeVoidAsync("fabricInterop.toggleRowLabels", "userCanvas");
+    }
+
+    private async Task ToggleSeatLabel()
+    {
+        await JS.InvokeVoidAsync("fabricInterop.toggleSeatLabels", "userCanvas");
+    }
+    public class SelectedSeat
+    {
+        public string Id { get; set; } = "";
+        public string Label { get; set; } = "";
+        public string CategoryId { get; set; } = "";
+        public string SeatType { get; set; } = "";
+        public double X { get; set; }
+        public double Y { get; set; }
+    }
+}

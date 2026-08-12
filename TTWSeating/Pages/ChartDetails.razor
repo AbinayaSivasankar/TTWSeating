@@ -1,0 +1,769 @@
+﻿@* @page "/chartdetails/{ChartId}"
+@using System.Collections.Specialized;
+@using System.Data;
+@using DataLayer;
+
+
+@code {
+    [Parameter]
+    public string ChartId { get; set; } = "0";
+    public string ChartName { get; set; } = "";
+    public string ChartKey { get; set; } = "";
+    public string EventKey { get; set; } = "";
+    protected override async void OnInitialized()
+    {
+        GetChartInfo(ChartId);
+    }
+    private void GetChartInfo(string chart_id)
+    {
+        cdlChart objchart = new cdlChart();
+        DataSet ds = new DataSet();
+        NameValueCollection vncParams = new NameValueCollection();
+        vncParams.Add("chart_id", chart_id);
+        vncParams.Add("log_id", "0");
+        vncParams.Add("chart_key", "");
+        vncParams.Add("option", "");
+        objchart.GetChartCategory(vncParams, ref ds);
+        if (ds != null && ds.Tables[0].Rows.Count > 0)
+        {
+            DataRow dr = ds.Tables[0].Rows[0];
+            ChartName = dr["chart_title"].ToString();
+            ChartKey = dr["chart_key"].ToString();
+        }
+        StateHasChanged();
+    }
+
+}
+ *@
+
+
+
+
+
+@page "/chartdetails/{ChartId}"
+@using System.Collections.Specialized;
+@using System.Data;
+@using DataLayer;
+@using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
+
+<style>
+    /* ─── ROOT VARIABLES (Terracotta Theme) ─── */
+    :root {
+        --bg-body: #f7f2eb;
+        --bg-surface: #fefcf8;
+        --bg-card: #ffffff;
+        --bg-elevated: #f5ede4;
+        --bg-hover: #f0e6da;
+        --bg-active: #e8d9c9;
+        --border-subtle: #e5d6c6;
+        --border-medium: #d4c0ab;
+        --border-strong: #bfa692;
+        --text-primary: #3a2c24;
+        --text-secondary: #6b5747;
+        --text-muted: #a48d7a;
+        --text-inverse: #ffffff;
+        --accent-1: #c9694b;
+        --accent-1-dark: #a84f34;
+        --accent-1-light: #e8a187;
+        --accent-1-glow: rgba(201, 105, 75, 0.20);
+        --accent-2: #d99b7a;
+        --accent-success: #6b8f71;
+        --accent-danger: #c05a4a;
+        --radius-sm: 6px;
+        --radius-md: 10px;
+        --radius-lg: 16px;
+        --radius-xl: 20px;
+        --radius-full: 9999px;
+        --shadow-card: 0 2px 16px rgba(90, 60, 40, 0.06), 0 1px 3px rgba(90, 60, 40, 0.03);
+        --shadow-elevated: 0 8px 32px rgba(90, 60, 40, 0.08);
+        --shadow-glow: 0 0 30px rgba(201, 105, 75, 0.12);
+        --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        --transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* ─── ANIMATIONS ─── */
+    @@keyframes fadeSlideIn {
+        0% {
+            opacity: 0;
+            transform: translateY(-10px);
+        }
+
+        100% {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @@keyframes fadeIn {
+        0% {
+            opacity: 0;
+            transform: translateY(-8px);
+        }
+
+        100% {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @@keyframes pulseGlow {
+        0%, 100% {
+            box-shadow: 0 0 20px var(--accent-1-glow);
+        }
+
+        50% {
+            box-shadow: 0 0 40px var(--accent-1-glow), 0 0 60px rgba(201, 105, 75, 0.1);
+        }
+    }
+
+    @@keyframes float {
+        0%, 100% {
+            transform: translateY(0);
+        }
+
+        50% {
+            transform: translateY(-6px);
+        }
+    }
+
+    /* ─── GLOBAL ─── */
+    body {
+        background: var(--bg-body);
+        font-family: var(--font);
+        color: var(--text-primary);
+        animation: fadeSlideIn 0.5s ease;
+        margin: 0;
+        padding: 0;
+    }
+
+    /* ─── HEADER (with centered tabs) ─── */
+    .terracotta-header {
+        background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
+        color: white;
+        padding: 8px 24px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        box-shadow: 0 4px 20px var(--accent-1-glow);
+        border-bottom: 2px solid rgba(255,255,255,0.15);
+        gap: 16px;
+        flex-wrap: wrap;
+        position: relative;
+        z-index: 100;
+    }
+
+        .terracotta-header .header-left {
+            display: flex;
+            align-items: center;
+            flex: 0 0 auto;
+        }
+
+        .terracotta-header .header-title {
+            font-size: 22px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            white-space: nowrap;
+        }
+
+            .terracotta-header .header-title i {
+                font-size: 22px;
+                background: rgba(255,255,255,0.2);
+                padding: 6px;
+                border-radius: var(--radius-md);
+            }
+
+    /* Tabs - centered */
+    .header-tabs {
+        display: flex;
+        gap: 4px;
+        background: rgba(255,255,255,0.12);
+        border-radius: var(--radius-lg);
+        padding: 4px;
+        backdrop-filter: blur(4px);
+        justify-content: center;
+        max-width: 400px;
+        margin: 0 auto;
+    }
+
+        .header-tabs .nav-item {
+            list-style: none;
+        }
+
+        .header-tabs .nav-link {
+            color: rgba(255,255,255,0.75);
+            border-radius: var(--radius-md);
+            padding: 6px 18px;
+            font-weight: 500;
+            font-size: 14px;
+            border: none;
+            background: transparent;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+            .header-tabs .nav-link i {
+                font-size: 16px;
+            }
+
+            .header-tabs .nav-link:hover {
+                background: rgba(255,255,255,0.15);
+                color: white;
+            }
+
+            .header-tabs .nav-link.active {
+                background: white;
+                color: var(--accent-1);
+                box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+                font-weight: 600;
+            }
+
+    .terracotta-header .header-right {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        flex: 0 0 auto;
+        position: relative;
+    }
+
+    /* ─── AVATAR DROPDOWN ─── */
+    .avatar-wrapper {
+        position: relative;
+        cursor: pointer;
+    }
+
+        .avatar-wrapper .avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: var(--radius-full);
+            background: rgba(255,255,255,0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 15px;
+            border: 2px solid rgba(255,255,255,0.3);
+            transition: var(--transition);
+            color: white;
+            user-select: none;
+        }
+
+            .avatar-wrapper .avatar:hover {
+                transform: scale(1.1);
+                background: rgba(255,255,255,0.3);
+            }
+
+        .avatar-wrapper .dropdown-menu {
+            position: absolute;
+            top: calc(100% + 8px);
+            right: 0;
+            min-width: 160px;
+            background: var(--bg-surface);
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-elevated);
+            border: 1px solid var(--border-subtle);
+            padding: 6px 0;
+            display: none;
+            animation: fadeIn 0.2s ease;
+            z-index: 1000;
+            overflow: hidden;
+        }
+
+            .avatar-wrapper .dropdown-menu.show {
+                display: block;
+            }
+
+            .avatar-wrapper .dropdown-menu .dropdown-item {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                padding: 10px 18px;
+                font-size: 13px;
+                color: var(--text-primary);
+                cursor: pointer;
+                transition: var(--transition);
+                border: none;
+                background: transparent;
+                width: 100%;
+                text-align: left;
+                font-family: var(--font);
+                font-weight: 500;
+            }
+
+                .avatar-wrapper .dropdown-menu .dropdown-item:hover {
+                    background: var(--bg-hover);
+                    color: var(--accent-1);
+                }
+
+                .avatar-wrapper .dropdown-menu .dropdown-item i {
+                    font-size: 15px;
+                    width: 18px;
+                    color: var(--text-muted);
+                    transition: var(--transition);
+                }
+
+                .avatar-wrapper .dropdown-menu .dropdown-item:hover i {
+                    color: var(--accent-1);
+                }
+
+                .avatar-wrapper .dropdown-menu .dropdown-item.danger {
+                    color: var(--accent-danger);
+                }
+
+                    .avatar-wrapper .dropdown-menu .dropdown-item.danger:hover {
+                        background: rgba(192, 90, 74, 0.08);
+                    }
+
+                    .avatar-wrapper .dropdown-menu .dropdown-item.danger i {
+                        color: var(--accent-danger);
+                    }
+
+            .avatar-wrapper .dropdown-menu .dropdown-divider {
+                height: 1px;
+                background: var(--border-subtle);
+                margin: 4px 12px;
+            }
+
+            .avatar-wrapper .dropdown-menu .dropdown-user-info {
+                padding: 8px 18px 4px;
+                font-size: 12px;
+                color: var(--text-muted);
+                border-bottom: 1px solid var(--border-subtle);
+                margin-bottom: 4px;
+            }
+
+                .avatar-wrapper .dropdown-menu .dropdown-user-info .user-email {
+                    font-weight: 500;
+                    color: var(--text-primary);
+                    font-size: 13px;
+                }
+
+    /* ─── DASHBOARD LAYOUT ─── */
+    .terracotta-dashboard {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 0 20px 30px;
+        animation: fadeSlideIn 0.6s ease;
+    }
+
+    /* ─── CHART DETAILS ACTION BAR ─── */
+    .terracotta-action-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 16px;
+        margin-bottom: 24px;
+        margin-top: 20px;
+        background: var(--bg-surface);
+        padding: 14px 20px;
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border-subtle);
+        box-shadow: var(--shadow-card);
+    }
+
+        .terracotta-action-bar .action-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .terracotta-action-bar .action-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .terracotta-action-bar .chart-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+            .terracotta-action-bar .chart-info .chart-name {
+                font-weight: 600;
+                font-size: 16px;
+                color: var(--text-primary);
+            }
+
+            .terracotta-action-bar .chart-info .chart-key {
+                font-family: monospace;
+                font-size: 13px;
+                color: var(--text-muted);
+                background: var(--bg-body);
+                padding: 4px 12px;
+                border-radius: var(--radius-sm);
+                border: 1px solid var(--border-subtle);
+                display: flex;
+                align-items: center;
+                gap: 6px;
+            }
+
+                .terracotta-action-bar .chart-info .chart-key .copy-btn {
+                    background: transparent;
+                    border: none;
+                    color: var(--text-muted);
+                    cursor: pointer;
+                    font-size: 13px;
+                    padding: 0 4px;
+                    transition: var(--transition);
+                }
+
+                    .terracotta-action-bar .chart-info .chart-key .copy-btn:hover {
+                        color: var(--accent-1);
+                    }
+
+        .terracotta-action-bar .create-btn {
+            background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
+            color: white;
+            border: none;
+            border-radius: var(--radius-md);
+            padding: 10px 24px;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            transition: var(--transition);
+            box-shadow: 0 4px 16px var(--accent-1-glow);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            white-space: nowrap;
+        }
+
+            .terracotta-action-bar .create-btn:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 8px 28px var(--accent-1-glow);
+            }
+
+            .terracotta-action-bar .create-btn i {
+                font-size: 16px;
+            }
+
+    /* ─── DETAILS PANEL ─── */
+    .terracotta-details-panel {
+        background: var(--bg-surface);
+        border-radius: var(--radius-xl);
+        padding: 24px 28px;
+        border: 1px solid var(--border-subtle);
+        box-shadow: var(--shadow-card);
+        margin-top: 10px;
+        animation: fadeSlideIn 0.4s ease;
+        transition: var(--transition);
+    }
+
+        .terracotta-details-panel .details-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+            .terracotta-details-panel .details-top h3 {
+                font-weight: 700;
+                color: var(--text-primary);
+                margin: 0;
+            }
+
+        .terracotta-details-panel .status-badge {
+            padding: 4px 14px;
+            border-radius: var(--radius-full);
+            font-size: 12px;
+            font-weight: 600;
+            background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
+            color: white;
+            box-shadow: 0 2px 12px var(--accent-1-glow);
+            animation: pulseGlow 3s infinite;
+        }
+
+        .terracotta-details-panel .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+            margin-top: 20px;
+        }
+
+        .terracotta-details-panel .stat-item {
+            background: var(--bg-body);
+            padding: 14px 18px;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-subtle);
+            transition: var(--transition);
+        }
+
+            .terracotta-details-panel .stat-item:hover {
+                border-color: var(--accent-1);
+                transform: translateY(-2px);
+                box-shadow: var(--shadow-glow);
+            }
+
+            .terracotta-details-panel .stat-item h4 {
+                font-size: 13px;
+                color: var(--text-muted);
+                font-weight: 500;
+                margin-bottom: 4px;
+            }
+
+            .terracotta-details-panel .stat-item span {
+                font-size: 16px;
+                font-weight: 600;
+                color: var(--text-primary);
+            }
+
+    /* ─── RESPONSIVE ─── */
+    @@media (max-width: 768px) {
+        .terracotta-header {
+            padding: 8px 12px;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 8px;
+        }
+
+            .terracotta-header .header-left {
+                justify-content: center;
+            }
+
+        .header-tabs {
+            max-width: 100%;
+            width: 100%;
+            justify-content: center;
+        }
+
+        .terracotta-header .header-right {
+            justify-content: center;
+        }
+
+        .terracotta-dashboard {
+            padding: 0 12px 20px;
+        }
+
+        .terracotta-action-bar {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+            .terracotta-action-bar .action-left,
+            .terracotta-action-bar .action-right {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .terracotta-action-bar .chart-info {
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+
+            .terracotta-action-bar .create-btn {
+                justify-content: center;
+                width: 100%;
+            }
+
+        .terracotta-details-panel {
+            padding: 16px;
+        }
+
+            .terracotta-details-panel .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+        .avatar-wrapper .dropdown-menu {
+            right: -10px;
+            min-width: 140px;
+        }
+    }
+</style>
+
+<!-- ─── HEADER (with centered tabs & avatar dropdown) ─── -->
+<header class="terracotta-header">
+    <div class="header-left">
+        <div class="header-title">
+            <i class="fa-solid fa-couch"></i>
+            <span>Seats<span style="color: rgba(255,255,255,0.7);"></span>Q</span>
+        </div>
+    </div>
+
+    <ul class="nav header-tabs" id="myTab" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview" type="button" role="tab">
+                <i class="fa-solid fa-chart-pie"></i> Charts
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="settings-tab" data-bs-toggle="tab" data-bs-target="#settings" type="button" role="tab">
+                <i class="fa-solid fa-gear"></i> Settings
+            </button>
+        </li>
+    </ul>
+
+    <div class="header-right">
+        <div class="avatar-wrapper" @onclick="ToggleDropdown" @onclick:stopPropagation="true">
+            <div class="avatar">@UserInitial</div>
+            <div class="dropdown-menu @(showDropdown ? "show" : "")">
+                <div class="dropdown-user-info">
+                    <div class="user-email">@UserEmail</div>
+                </div>
+                <button class="dropdown-item danger" @onclick="Logout">
+                    <i class="fa-solid fa-right-from-bracket"></i> Logout
+                </button>
+            </div>
+        </div>
+    </div>
+</header>
+
+<!-- ─── DASHBOARD BODY ─── -->
+<div class="terracotta-dashboard">
+    <!-- ─── ACTION BAR ─── -->
+    <div class="terracotta-action-bar">
+        <!-- Left side: Create Event button -->
+        <div class="action-left">
+            <button class="create-btn" @onclick="CreateEvent">
+                <i class="fa-solid fa-plus-circle"></i> Create Event
+            </button>
+        </div>
+
+        <!-- Right side: Chart name and key -->
+        <div class="action-right">
+            <div class="chart-info">
+                <span class="chart-name">
+                    <i class="fa-solid fa-chart-simple" style="color: var(--accent-1);"></i>
+                    @ChartName
+                </span>
+                <span class="chart-key">
+                    <i class="fa-solid fa-key"></i>
+                    @ChartKey
+                    <button class="copy-btn" @onclick="CopyChartKey" title="Copy chart key">
+                        <i class="fa-regular fa-copy"></i>
+                    </button>
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <!-- ─── DETAILS PANEL ─── -->
+    <div class="terracotta-details-panel">
+        <div class="details-top">
+            <h3>Chart Details</h3>
+            <span class="status-badge">
+                <i class="fa-solid fa-circle" style="font-size: 8px; margin-right: 6px;"></i>
+                Active
+            </span>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-item">
+                <h4>Chart ID</h4>
+                <span>#@ChartId</span>
+            </div>
+            <div class="stat-item">
+                <h4>Event Key</h4>
+                <span>@(!string.IsNullOrEmpty(EventKey) ? EventKey : "No events yet")</span>
+            </div>
+            <div class="stat-item">
+                <h4>Total Events</h4>
+                <span>@(GetEventCount())</span>
+            </div>
+            <div class="stat-item">
+                <h4>Last Updated</h4>
+                <span>@DateTime.Now.ToString("MMM dd, yyyy")</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public string ChartId { get; set; } = "0";
+    public string ChartName { get; set; } = "";
+    public string ChartKey { get; set; } = "";
+    public string EventKey { get; set; } = "";
+    private bool showDropdown = false;
+    private string UserEmail = "user@example.com"; // Replace with actual user email
+    private string UserInitial => UserEmail?.Length > 0 ? UserEmail[0].ToString().ToUpper() : "?";
+    private string UserId { get; set; } = "0";
+    [Inject]
+    NavigationManager NavManager { get; set; }
+    [Inject]
+    ProtectedSessionStorage sessionStorage { get; set; }
+    protected override async void OnInitialized()
+    {
+        var result = await sessionStorage.GetAsync<string>("UserEmail");
+        if (result.Success) UserEmail = result.Value;
+
+        var userIdResult = await sessionStorage.GetAsync<string>("UserId");
+        UserId = userIdResult.Value;
+        if (UserId != "" && UserId != "0")
+        {
+            GetChartInfo(ChartId);
+        }
+        else
+        {
+            NavManager.NavigateTo("/");
+        }
+    }
+
+    private void GetChartInfo(string chart_id)
+    {
+        cdlChart objchart = new cdlChart();
+        DataSet ds = new DataSet();
+        NameValueCollection vncParams = new NameValueCollection();
+        vncParams.Add("chart_id", chart_id);
+        vncParams.Add("log_id", "0");
+        vncParams.Add("chart_key", "");
+        vncParams.Add("option", "");
+        objchart.GetChartCategory(vncParams, ref ds);
+        if (ds != null && ds.Tables[0].Rows.Count > 0)
+        {
+            DataRow dr = ds.Tables[0].Rows[0];
+            ChartName = dr["chart_title"].ToString();
+            ChartKey = dr["chart_key"].ToString();
+            // If event key exists in the data, set it
+            if (dr.Table.Columns.Contains("event_key") && dr["event_key"] != DBNull.Value)
+            {
+                EventKey = dr["event_key"].ToString();
+            }
+        }
+        StateHasChanged();
+    }
+
+    private void ToggleDropdown()
+    {
+        showDropdown = !showDropdown;
+        StateHasChanged();
+    }
+
+    private async Task CopyChartKey()
+    {
+        if (!string.IsNullOrEmpty(ChartKey))
+        {
+           // await Clipboard.WriteTextAsync(ChartKey);
+            // Optional: Show a toast/notification
+        }
+    }
+
+    private void CreateEvent()
+    {
+        // Navigate to create event page or open modal
+        // NavigationManager.NavigateTo($"/create-event/{ChartId}");
+    }
+
+    private int GetEventCount()
+    {
+        // Return the actual event count for this chart
+        return 0; // Replace with actual logic
+    }
+
+    private void Logout()
+    {
+        // Implement logout logic
+        showDropdown = false;
+        // NavigationManager.NavigateTo("/logout");
+    }
+
+   
+}

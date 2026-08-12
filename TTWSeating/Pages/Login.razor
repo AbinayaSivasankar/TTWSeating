@@ -1,0 +1,812 @@
+﻿@page "/"
+@using DataLayer;
+@using System.Collections.Specialized
+@using System.Data
+@using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
+@using System.Net.Mail
+
+<style>
+    /* ─── ROOT VARIABLES (Terracotta Theme) ─── */
+    :root {
+        --bg-body: #f7f2eb;
+        --bg-surface: #fefcf8;
+        --bg-card: #ffffff;
+        --bg-elevated: #f5ede4;
+        --bg-hover: #f0e6da;
+        --bg-active: #e8d9c9;
+        --border-subtle: #e5d6c6;
+        --border-medium: #d4c0ab;
+        --border-strong: #bfa692;
+        --text-primary: #3a2c24;
+        --text-secondary: #6b5747;
+        --text-muted: #a48d7a;
+        --text-inverse: #ffffff;
+        --accent-1: #c9694b;
+        --accent-1-dark: #a84f34;
+        --accent-1-light: #e8a187;
+        --accent-1-glow: rgba(201, 105, 75, 0.20);
+        --accent-2: #d99b7a;
+        --accent-success: #6b8f71;
+        --accent-danger: #c05a4a;
+        --radius-sm: 6px;
+        --radius-md: 10px;
+        --radius-lg: 16px;
+        --radius-xl: 20px;
+        --radius-full: 9999px;
+        --shadow-card: 0 2px 16px rgba(90, 60, 40, 0.06), 0 1px 3px rgba(90, 60, 40, 0.03);
+        --shadow-elevated: 0 8px 32px rgba(90, 60, 40, 0.08);
+        --shadow-glow: 0 0 30px rgba(201, 105, 75, 0.12);
+        --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        --transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* ─── ANIMATIONS ─── */
+    @@keyframes fadeSlideIn {
+        0% {
+            opacity: 0;
+            transform: translateY(-12px);
+        }
+
+        100% {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    /* ─── GLOBAL ─── */
+    body {
+        margin: 0;
+        font-family: var(--font);
+        background: var(--bg-body);
+        color: var(--text-primary);
+        height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        animation: fadeSlideIn 0.6s ease;
+    }
+
+    /* ─── CONTAINER ─── */
+    .terracotta-login {
+        display: flex;
+        width: 100%;
+        max-width: 1200px;
+        height: 90vh;
+        max-height: 700px;
+        border-radius: var(--radius-xl);
+        overflow: hidden;
+        box-shadow: var(--shadow-elevated);
+        background: var(--bg-surface);
+        border: 1px solid var(--border-subtle);
+        animation: fadeSlideIn 0.7s ease;
+    }
+
+    /* ─── LEFT PANEL ─── */
+    .login-left {
+        flex: 1;
+        background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
+        color: white;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding: 50px 40px;
+        position: relative;
+        overflow: hidden;
+    }
+
+        .login-left::after {
+            content: '';
+            position: absolute;
+            top: -30%;
+            right: -30%;
+            width: 80%;
+            height: 80%;
+            background: rgba(255,255,255,0.05);
+            border-radius: 50%;
+            pointer-events: none;
+        }
+
+        .login-left .brand-icon {
+            font-size: 48px;
+            margin-bottom: 20px;
+            background: rgba(255,255,255,0.15);
+            width: 72px;
+            height: 72px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: var(--radius-lg);
+            backdrop-filter: blur(4px);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+
+        .login-left h1 {
+            font-size: 36px;
+            font-weight: 700;
+            margin: 0 0 8px 0;
+            letter-spacing: -0.02em;
+        }
+
+        .login-left .subtitle {
+            font-size: 16px;
+            opacity: 0.9;
+            margin: 0;
+            font-weight: 400;
+            line-height: 1.6;
+        }
+
+        .login-left .features {
+            margin-top: 30px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+            .login-left .features .feature-item {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                font-size: 14px;
+                opacity: 0.9;
+            }
+
+                .login-left .features .feature-item i {
+                    font-size: 18px;
+                    background: rgba(255,255,255,0.15);
+                    padding: 6px;
+                    border-radius: var(--radius-full);
+                }
+
+    /* ─── RIGHT PANEL ─── */
+    .login-right {
+        flex: 1;
+        background: var(--bg-surface);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 30px;
+    }
+
+    /* ─── CARD ─── */
+    .login-card {
+        width: 100%;
+        max-width: 400px;
+        background: var(--bg-surface);
+        border-radius: var(--radius-lg);
+        padding: 10px 0;
+        animation: fadeSlideIn 0.6s ease;
+    }
+
+    /* ─── WELCOME ALERT ─── */
+    .welcome-alert {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 14px 18px;
+        margin-bottom: 22px;
+        border-radius: var(--radius-md);
+        background: var(--accent-1-glow);
+        border: 1px solid rgba(201, 105, 75, 0.15);
+        animation: fadeSlideIn 0.4s ease;
+    }
+
+        .welcome-alert .welcome-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: var(--radius-md);
+            background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 20px;
+            flex-shrink: 0;
+            box-shadow: 0 4px 16px var(--accent-1-glow);
+        }
+
+        .welcome-alert .welcome-content {
+            flex: 1;
+        }
+
+        .welcome-alert .welcome-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 2px;
+        }
+
+        .welcome-alert .welcome-text {
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+
+    /* ─── TITLE ─── */
+    .login-title {
+        font-size: 24px;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: 20px;
+        letter-spacing: -0.01em;
+    }
+
+    /* ─── INPUT GROUPS ─── */
+    .input-group {
+        margin-bottom: 16px;
+    }
+
+        .input-group label {
+            display: block;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 10px 14px;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-subtle);
+            background: var(--bg-body);
+            color: var(--text-primary);
+            font-size: 14px;
+            transition: var(--transition);
+            outline: none;
+            box-sizing: border-box;
+        }
+
+            .input-group input:focus {
+                border-color: var(--accent-1);
+                box-shadow: 0 0 0 3px var(--accent-1-glow);
+                background: var(--bg-surface);
+            }
+
+            .input-group input::placeholder {
+                color: var(--text-muted);
+            }
+
+    /* ─── SHOW PASSWORD ─── */
+    .show-password-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 6px;
+    }
+
+        .show-password-row input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            accent-color: var(--accent-1);
+            cursor: pointer;
+        }
+
+        .show-password-row label {
+            font-size: 13px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            user-select: none;
+        }
+
+    /* ─── BUTTON ─── */
+    .login-btn {
+        width: 100%;
+        padding: 12px;
+        border: none;
+        border-radius: var(--radius-md);
+        background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
+        color: white;
+        font-weight: 600;
+        font-size: 15px;
+        cursor: pointer;
+        transition: var(--transition);
+        box-shadow: 0 4px 16px var(--accent-1-glow);
+        margin-top: 8px;
+        letter-spacing: 0.02em;
+    }
+
+        .login-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 28px var(--accent-1-glow);
+        }
+
+        .login-btn:active {
+            transform: scale(0.98);
+        }
+
+    .login-btn-secondary {
+        background: var(--bg-body);
+        color: var(--text-primary);
+        box-shadow: none;
+        border: 1px solid var(--border-subtle);
+    }
+
+        .login-btn-secondary:hover {
+            background: var(--bg-hover);
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-card);
+        }
+
+    /* ─── FOOTER ─── */
+    .login-footer {
+        margin-top: 18px;
+        font-size: 14px;
+        text-align: center;
+        color: var(--text-muted);
+    }
+
+        .login-footer a {
+            color: var(--accent-1);
+            cursor: pointer;
+            font-weight: 600;
+            text-decoration: none;
+            transition: var(--transition);
+        }
+
+            .login-footer a:hover {
+                color: var(--accent-1-dark);
+                text-decoration: underline;
+            }
+
+    /* ─── FORGOT PASSWORD LINK ─── */
+    .forgot-link {
+        text-align: right;
+        margin-top: -8px;
+        margin-bottom: 12px;
+    }
+
+        .forgot-link a {
+            font-size: 13px;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: var(--transition);
+            text-decoration: none;
+        }
+
+            .forgot-link a:hover {
+                color: var(--accent-1);
+                text-decoration: underline;
+            }
+
+    /* ─── RESPONSIVE ─── */
+    @@media (max-width: 900px) {
+        .terracotta-login {
+            flex-direction: column;
+            height: auto;
+            max-height: none;
+            margin: 20px;
+            border-radius: var(--radius-xl);
+        }
+
+        .login-left {
+            padding: 30px 24px;
+            text-align: center;
+            align-items: center;
+        }
+
+            .login-left .brand-icon {
+                margin: 0 auto 16px;
+            }
+
+            .login-left .features {
+                align-items: flex-start;
+                width: 100%;
+                max-width: 300px;
+            }
+
+        .login-right {
+            padding: 20px;
+        }
+
+        .login-card {
+            max-width: 100%;
+        }
+    }
+
+    @@media (max-width: 480px) {
+        .login-left h1 {
+            font-size: 28px;
+        }
+
+        .login-left .subtitle {
+            font-size: 14px;
+        }
+
+        .login-card {
+            padding: 0;
+        }
+
+        .login-title {
+            font-size: 20px;
+        }
+    }
+</style>
+
+<!-- ─── MAIN CONTAINER ─── -->
+<div class="terracotta-login">
+
+    <!-- LEFT PANEL -->
+    <div class="login-left">
+        <div class="brand-icon">
+            <i class="fa-solid fa-couch"></i>
+        </div>
+        <h1>SeatsQ</h1>
+        <p class="subtitle">Design and manage your seating layouts with ease. Smart, simple, and beautiful.</p>
+        <div class="features">
+            <div class="feature-item">
+                <i class="fa-regular fa-pen-to-square"></i>
+                <span>Drag & drop seat design</span>
+            </div>
+            <div class="feature-item">
+                <i class="fa-solid fa-users"></i>
+                <span>Manage multiple charts</span>
+            </div>
+            <div class="feature-item">
+                <i class="fa-solid fa-cloud"></i>
+                <span>Save and share layouts</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- RIGHT PANEL -->
+    <div class="login-right">
+
+        <div class="login-card">
+
+            @if (isForgotPassword)
+            {
+                <!-- FORGOT PASSWORD FORM -->
+                <div class="login-title">Reset Password</div>
+                <p style="color: var(--text-secondary); font-size: 14px; margin-bottom: 20px;">
+                    Enter your email address. If it exists, you can set a new password.
+                </p>
+
+                <div class="input-group">
+                    <label>Email Address</label>
+                    <input type="email" placeholder="you@example.com" @bind="ForgotEmail" disabled="@isEmailVerified" />
+                </div>
+
+                @if (!isEmailVerified)
+                {
+                    <button class="login-btn" @onclick="VerifyEmail">
+                        <i class="fa-solid fa-envelope" style="margin-right:8px;"></i> Verify Email
+                    </button>
+                }
+                else
+                {
+                    <!-- Show password fields after verification -->
+                    <div class="input-group">
+                        <label>New Password</label>
+                        <input type="@(showPassword ? "text" : "password")" placeholder="Enter new password" @bind="NewPassword" />
+                    </div>
+                    <div class="input-group">
+                        <label>Confirm Password</label>
+                        <input type="@(showPassword ? "text" : "password")" placeholder="Confirm new password" @bind="ConfirmPassword" />
+                    </div>
+                    <div class="show-password-row">
+                        <input type="checkbox" id="showPwdReset" @bind="showPassword" />
+                        <label for="showPwdReset">Show Password</label>
+                    </div>
+
+                    <button class="login-btn" @onclick="UpdatePassword">
+                        <i class="fa-solid fa-key" style="margin-right:8px;"></i> Update Password
+                    </button>
+                }
+
+                <div class="login-footer" style="margin-top:16px;">
+                    <a @onclick="BackToLogin">← Back to Sign In</a>
+                </div>
+            }
+            else if (isLogin)
+            {
+                <!-- WELCOME ALERT (shown after signup) -->
+                @if (!string.IsNullOrEmpty(Showalert) && Showalert != "display:none")
+                {
+                    <div class="welcome-alert" style="@Showalert">
+                        <div class="welcome-icon">
+                            <i class="fa-regular fa-check"></i>
+                        </div>
+                        <div class="welcome-content">
+                            <div class="welcome-title">Welcome to SeatsQ 🎉</div>
+                            <div class="welcome-text">
+                                Your account has been created successfully. Sign in to start designing your seating charts.
+                            </div>
+                        </div>
+                    </div>
+                }
+
+                <!-- LOGIN FORM -->
+                <div class="login-title">Welcome Back</div>
+
+                <div class="input-group">
+                    <label>Email Address</label>
+                    <input type="email" placeholder="you@example.com" @bind="Email" />
+                </div>
+
+                <div class="input-group">
+                    <label>Password</label>
+                    <input type="@(showPassword ? "text" : "password")" placeholder="Enter your password" @bind="Password" />
+                    <div class="show-password-row">
+                        <input type="checkbox" id="showPwdLogin" @bind="showPassword" />
+                        <label for="showPwdLogin">Show Password</label>
+                    </div>
+                </div>
+
+                <!-- Forgot password link -->
+                <div class="forgot-link">
+                    <a @onclick="ShowForgotPassword">Forgot password?</a>
+                </div>
+
+                <button class="login-btn" @onclick="LoginClick">
+                    <i class="fa-solid fa-arrow-right-to-bracket" style="margin-right:8px;"></i> Sign In
+                </button>
+
+                <div class="login-footer">
+                    Don't have an account?
+                    <a @onclick="ShowSignup">Sign up</a>
+                </div>
+            }
+            else
+            {
+                <!-- SIGNUP FORM -->
+                <div class="login-title">Create Account</div>
+
+                <div class="input-group">
+                    <label>Full Name</label>
+                    <input type="text" placeholder="John Doe" @bind="Name" />
+                </div>
+
+                <div class="input-group">
+                    <label>Email Address</label>
+                    <input type="email" placeholder="you@example.com" @bind="Email" />
+                </div>
+
+                <div class="input-group">
+                    <label>Password</label>
+                    <input type="@(showPassword ? "text" : "password")" placeholder="Create a strong password" @bind="Password" />
+                    <div class="show-password-row">
+                        <input type="checkbox" id="showPwdSignup" @bind="showPassword" />
+                        <label for="showPwdSignup">Show Password</label>
+                    </div>
+                </div>
+
+                <button class="login-btn" @onclick="RegisterClick">
+                    <i class="fa-solid fa-user-plus" style="margin-right:8px;"></i> Create Account
+                </button>
+
+                <div class="login-footer">
+                    Already have an account?
+                    <a @onclick="ShowLogin">Sign in</a>
+                </div>
+            }
+
+        </div>
+
+    </div>
+
+</div>
+
+@code {
+    bool isLogin = true;
+    bool isForgotPassword = false;
+    bool isEmailVerified = false;
+    string Name = "";
+    string Email = "";
+    string Password = "";
+    string ForgotEmail = "";
+    string NewPassword = "";
+    string ConfirmPassword = "";
+    public string Showalert { get; set; } = "display:none";
+    private bool showPassword = false;
+
+    [Inject]
+    NavigationManager NavManager { get; set; }
+
+    [Inject]
+    ProtectedSessionStorage sessionStorage { get; set; }
+
+    [Inject]
+    IJSRuntime js { get; set; }
+
+    // ─── UI NAVIGATION ───
+    private void ShowSignup()
+    {
+        isLogin = false;
+        isForgotPassword = false;
+        isEmailVerified = false;
+        Email = "";
+        Password = "";
+        ForgotEmail = "";
+        NewPassword = "";
+        ConfirmPassword = "";
+        Showalert = "display:none";
+    }
+
+    private void ShowLogin()
+    {
+        isLogin = true;
+        isForgotPassword = false;
+        isEmailVerified = false;
+        Email = "";
+        Password = "";
+        ForgotEmail = "";
+        NewPassword = "";
+        ConfirmPassword = "";
+        Showalert = "display:none";
+    }
+
+    private void ShowForgotPassword()
+    {
+        isLogin = false;
+        isForgotPassword = true;
+        isEmailVerified = false;
+        ForgotEmail = "";
+        NewPassword = "";
+        ConfirmPassword = "";
+    }
+
+    private void BackToLogin()
+    {
+        isLogin = true;
+        isForgotPassword = false;
+        isEmailVerified = false;
+        ForgotEmail = "";
+        NewPassword = "";
+        ConfirmPassword = "";
+    }
+
+    // ─── LOGIN ───
+    public async void LoginClick()
+    {
+        if (string.IsNullOrWhiteSpace(Email))
+        {
+            await js.InvokeVoidAsync("showNotification", "Please enter your email address.", "Info");
+            return;
+        }
+        if (!MailAddress.TryCreate(Email, out _))
+        {
+            await js.InvokeVoidAsync("showNotification", "Please enter a valid email address.", "Info");
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(Password))
+        {
+            await js.InvokeVoidAsync("showNotification", "Please enter your password.", "Info");
+            return;
+        }
+
+        cdlUser objUser = new cdlUser();
+        NameValueCollection vncParams = new NameValueCollection();
+        DataSet ds = new DataSet();
+        vncParams.Add("user_email", Email);
+        vncParams.Add("password", Password);
+        objUser.ValidateLogin(vncParams, ref ds);
+
+        if (ds != null && ds.Tables.Count > 0 && ds.Tables[0].Rows.Count > 0)
+        {
+            DataRow dr = ds.Tables[0].Rows[0];
+            await sessionStorage.SetAsync("UserId", dr["user_id"].ToString());
+            await sessionStorage.SetAsync("UserEmail", dr["user_email"].ToString());
+            NavManager.NavigateTo("home");
+        }
+        else
+        {
+            await js.InvokeVoidAsync("showNotification", "Invalid email or password. Please try again.", "Info");
+            Password = "";
+        }
+    }
+
+    // ─── REGISTER ───
+    public async void RegisterClick()
+    {
+        if (string.IsNullOrWhiteSpace(Name))
+        {
+            await js.InvokeVoidAsync("showNotification", "Please enter your full name.", "Info");
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(Email))
+        {
+            await js.InvokeVoidAsync("showNotification", "Please enter your email address.", "Info");
+            return;
+        }
+        if (!MailAddress.TryCreate(Email, out _))
+        {
+            await js.InvokeVoidAsync("showNotification", "Please enter a valid email address.", "Info");
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(Password))
+        {
+            await js.InvokeVoidAsync("showNotification", "Please create a password.", "Info");
+            return;
+        }
+
+        cdlUser objUser = new cdlUser();
+        NameValueCollection vncParams = new NameValueCollection();
+        vncParams.Add("user_id", "0");
+        vncParams.Add("user_name", Name);
+        vncParams.Add("user_email", Email);
+        vncParams.Add("password", Password);
+        vncParams.Add("rec_stat", "A");
+        vncParams.Add("public_key", Guid.NewGuid().ToString());
+        vncParams.Add("secret_key", Guid.NewGuid().ToString());
+        objUser.Add(vncParams);
+
+        // Clear and show login with welcome alert
+        Email = "";
+        Password = "";
+        Name = "";
+        isLogin = true;
+        isForgotPassword = false;
+        Showalert = "display:flex";
+        StateHasChanged();
+    }
+
+    // ─── FORGOT PASSWORD – VERIFY EMAIL ───
+    public async void VerifyEmail()
+    {
+        if (string.IsNullOrWhiteSpace(ForgotEmail))
+        {
+            await js.InvokeVoidAsync("showNotification", "Please enter your email address.", "Info");
+            return;
+        }
+        if (!MailAddress.TryCreate(ForgotEmail, out _))
+        {
+            await js.InvokeVoidAsync("showNotification", "Please enter a valid email address.", "Info");
+            return;
+        }
+
+        // Check if email exists in the database.
+        // We'll call a method in cdlUser to check existence.
+        cdlUser objUser = new cdlUser();
+        bool exists = objUser.CheckEmailExists(ForgotEmail); // You'll need to implement this method.
+
+        if (exists)
+        {
+            isEmailVerified = true;
+            StateHasChanged();
+            await js.InvokeVoidAsync("showNotification", "Email verified. Please enter your new password.", "Success");
+        }
+        else
+        {
+            await js.InvokeVoidAsync("showNotification", "No account found with this email address.", "Error");
+        }
+    }
+
+    // ─── FORGOT PASSWORD – UPDATE PASSWORD ───
+    public async void UpdatePassword()
+    {
+        if (string.IsNullOrWhiteSpace(NewPassword))
+        {
+            await js.InvokeVoidAsync("showNotification", "Please enter a new password.", "Info");
+            return;
+        }
+        if (NewPassword.Length < 6) // example minimal strength
+        {
+            await js.InvokeVoidAsync("showNotification", "Password must be at least 6 characters long.", "Info");
+            return;
+        }
+        if (NewPassword != ConfirmPassword)
+        {
+            await js.InvokeVoidAsync("showNotification", "Passwords do not match.", "Info");
+            return;
+        }
+
+        // Update password in the database
+        cdlUser objUser = new cdlUser();
+        NameValueCollection vncParams = new NameValueCollection();
+        vncParams.Add("user_email", ForgotEmail);
+        vncParams.Add("password", NewPassword);
+        int updated = objUser.UpdatePassword(vncParams); // You'll need to implement this method.
+
+        if (updated == 0)
+        {
+            await js.InvokeVoidAsync("showNotification", "Your password has been updated successfully. Please sign in.", "Success");
+            // Redirect to login
+            BackToLogin();
+            StateHasChanged();
+        }
+        else
+        {
+            await js.InvokeVoidAsync("showNotification", "Failed to update password. Please try again.", "Error");
+        }
+    }
+}

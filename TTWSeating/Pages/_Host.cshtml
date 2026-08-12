@@ -1,0 +1,316 @@
+﻿@page "/"
+@using Microsoft.AspNetCore.Components.Web
+@namespace TTWSeating.Pages
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="~/" />
+    <link rel="stylesheet" href="css/bootstrap/bootstrap.min.css" />
+    <link href="css/site.css" rel="stylesheet" />
+    <link href="TTWSeating.styles.css" rel="stylesheet" />
+    <link rel="icon" type="image/png" href="favicon.png" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+
+
+
+
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+
+
+
+    <!-- Google Fonts: Inter & Poppins for a modern look -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700&family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
+    <component type="typeof(HeadOutlet)" render-mode="ServerPrerendered" />
+</head>
+<body>
+    <component type="typeof(App)" render-mode="Server" />
+
+    <div id="blazor-error-ui">
+        <environment include="Staging,Production">
+            An error has occurred. This application may no longer respond until reloaded.
+        </environment>
+        <environment include="Development">
+            An unhandled exception has occurred. See browser dev tools for details.
+        </environment>
+        <a href="" class="reload">Reload</a>
+        <a class="dismiss">🗙</a>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
+    <script src="Script/seating-widget.js"></script>
+    <script src="Script/seating-chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="_framework/blazor.server.js"></script>
+
+    <script>
+             function OpenModal(id) {
+                 bootstrap.Modal.getOrCreateInstance(document.getElementById(id)).show();
+             }
+
+
+             function CloseModal(id) {
+                 bootstrap.Modal.getOrCreateInstance(document.getElementById(id)).hide();
+             }
+
+
+             function CreateCategoryTextbox(){
+                     const container = document.getElementById("category");
+
+                   // wrapper div to group textbox + color picker
+                     const row = document.createElement("div");
+                     row.className = "d-flex gap-2 align-items-center mt-2 category-row new-category";
+
+                   // textbox
+                      const input = document.createElement("input");
+                      input.type = "text";
+                      input.classList.add("cat-name");
+                      input.classList.add("form-control");;
+                      //input.className = "cat-name";
+                      input.placeholder = "Enter category name";
+
+                   // color picker
+                      const color = document.createElement("input");
+                      color.type = "color";
+                       color.className = "cat-color custom-color";
+                      color.value = "#000000";
+
+                  // delete icon
+                      const del = document.createElement("i");
+                      del.className = "fa-regular fa-trash-can";
+                      del.style.cursor = "pointer";
+
+                  // delete row when icon clicked
+                      del.addEventListener("click", function () {
+                             row.remove();
+                      });
+
+                  // append items
+                       row.appendChild(input);
+                       row.appendChild(color);
+                       row.appendChild(del);
+                       container.appendChild(row);
+             }
+
+
+
+        function clearNewCategoryRows() {
+             document.querySelectorAll(".new-category").forEach(el => el.remove());
+        }
+    </script>
+    <script>
+
+        let mockCharts = [
+            { chart_id: "CH-1001", chart_title: "Sales Performance 2025", chart_key: "sale_2025_k1", seats: 98, status: "Active" },
+            { chart_id: "CH-1002", chart_title: "User Acquisition Funnel", chart_key: "ua_funnel_02", seats: 45, status: "Active" },
+            { chart_id: "CH-1003", chart_title: "Quarterly Revenue", chart_key: "rev_q2_2026", seats: 120, status: "Review" },
+            { chart_id: "CH-1004", chart_title: "Customer Satisfaction", chart_key: "csat_net", seats: 87, status: "Active" },
+            { chart_id: "CH-1005", chart_title: "Marketing ROI", chart_key: "mroi_dash", seats: 210, status: "Draft" }
+        ];
+
+        let selectedChartId = localStorage.getItem('selectedChartId') || "CH-1001";
+        let searchText = "";
+
+        // helper: re-render UI based on current state (simulate Blazor binding)
+        function renderCharts() {
+            const container = document.querySelector('.chart-list');
+            if (!container) return;
+            const filtered = mockCharts.filter(ch => ch.chart_title.toLowerCase().includes(searchText.toLowerCase()));
+            if (filtered.length === 0) {
+                container.innerHTML = `<div class="empty-list"><i class="fas fa-chart-simple" style="font-size: 2rem;"></i><span>No matching charts</span></div>`;
+                return;
+            }
+            let html = '';
+            filtered.forEach(ch => {
+                const activeClass = (selectedChartId === ch.chart_id) ? 'active' : '';
+                html += `
+                    <div class="chart-list-card ${activeClass}" data-chart-id="${ch.chart_id}">
+                        <div class="chart-info">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span class="chart-title"><i class="fas fa-chart-pie" style="margin-right: 8px; color:#6d28d9;"></i> ${escapeHtml(ch.chart_title)}</span>
+                                <span class="badge-icon"><i class="far fa-clock"></i> updated</span>
+                            </div>
+                            <div class="info-row">
+                                <span><i class="fas fa-key" style="font-size: 11px;"></i> <span class="chart-key">${escapeHtml(ch.chart_key)}</span></span>
+                                <span><i class="fas fa-users"></i> ${ch.seats} seats</span>
+                            </div>
+                        </div>
+                        <div class="edit-overlay" data-edit-id="${ch.chart_id}">
+                            <i class="fas fa-pen-fancy"></i>
+                            <span>Edit Chart</span>
+                            <i class="fas fa-grip-vertical"></i>
+                        </div>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+
+            // attach event listeners for selection and edit
+            document.querySelectorAll('.chart-list-card').forEach(card => {
+                const chartId = card.getAttribute('data-chart-id');
+                card.addEventListener('click', (e) => {
+                    // if click originated from edit overlay, avoid selection
+                    if (e.target.closest('.edit-overlay')) return;
+                    selectedChartId = chartId;
+                    localStorage.setItem('selectedChartId', selectedChartId);
+                    renderCharts();
+                    renderDetails();
+                });
+            });
+            document.querySelectorAll('.edit-overlay').forEach(overlay => {
+                overlay.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const chartId = overlay.getAttribute('data-edit-id');
+                    if (chartId) {
+                        alert(`✏️ Edit mode: "${mockCharts.find(c => c.chart_id === chartId)?.chart_title}"\nIn full implementation, this would open a modal or inline editor.`);
+                        // mimic EditChart method
+                    }
+                });
+            });
+        }
+
+        function renderDetails() {
+            const detailsContainer = document.querySelector('.chart-content');
+            if (!detailsContainer) return;
+            const selectedChart = mockCharts.find(ch => ch.chart_id === selectedChartId);
+            if (!selectedChart) {
+                // fallback no selection
+                detailsContainer.innerHTML = `
+                    <div class="no-selection">
+                        <i class="fas fa-chalkboard-user"></i>
+                        <p><strong>No chart selected</strong></p>
+                        <p style="font-size: 0.85rem;">Pick a chart from the left panel or create a fresh visual.</p>
+                        <div class="create-chart-card" id="createFromEmpty" style="background: linear-gradient(105deg, #4f46e5, #7c3aed); width: fit-content; margin: 20px auto 0 auto; padding: 8px 24px;">
+                            <i class="fas fa-plus"></i> Create new chart
+                        </div>
+                    </div>
+                `;
+                const createBtn = document.getElementById('createFromEmpty');
+                if (createBtn) createBtn.addEventListener('click', () => CreateChartHandler());
+                return;
+            }
+            const seatsVal = selectedChart.seats;
+            const statusVal = selectedChart.status === 'Active' ? 'Active · Synced' : (selectedChart.status === 'Review' ? 'Under review' : 'Draft mode');
+            const statusColorClass = selectedChart.status === 'Active' ? '#22c55e' : (selectedChart.status === 'Review' ? '#eab308' : '#94a3b8');
+            detailsContainer.innerHTML = `
+                <div class="chart-details-card">
+                    <div class="details-header">
+                        <div class="detail-icon"><i class="fas fa-chart-simple"></i></div>
+                        <h5>Chart Insight Studio</h5>
+                    </div>
+                    <div class="details-body">
+                        <div class="info-grid">
+                            <div class="info-item"><div class="info-label"><i class="fas fa-fingerprint"></i> Chart ID</div><div class="info-value small-id">${escapeHtml(selectedChart.chart_id)}</div></div>
+                            <div class="info-item"><div class="info-label"><i class="fas fa-heading"></i> Chart Name</div><div class="info-value">${escapeHtml(selectedChart.chart_title)}</div></div>
+                            <div class="info-item"><div class="info-label"><i class="fas fa-ban"></i> Status</div><div class="info-value"><span class="status-badge" style="background: #eef2ff; color:#334155;"><i class="fas fa-circle" style="font-size: 8px; margin-right: 6px; color: ${statusColorClass};"></i> ${statusVal}</span></div></div>
+                            <div class="info-item"><div class="info-label"><i class="fas fa-chair"></i> Seats allocated</div><div class="info-value">${seatsVal} <span style="font-size: 0.9rem;">/ 250 total</span></div></div>
+                            <div class="info-item"><div class="info-label"><i class="fas fa-qrcode"></i> Unique Key</div><div class="info-value" style="font-family: monospace;">${escapeHtml(selectedChart.chart_key)}</div></div>
+                            <div class="info-item"><div class="info-label"><i class="fas fa-calendar-alt"></i> Last Edited</div><div class="info-value">April 24, 2026</div></div>
+                        </div>
+                        <div style="margin-top: 30px; border-top: 1px solid #edf2f7; padding-top: 20px; display: flex; gap: 12px; justify-content: flex-end;">
+                            <button class="edit-detail-btn" style="background: transparent; color:#4f46e5; border: 1px solid #cbd5e1; border-radius: 40px; padding: 8px 20px; font-weight: 500; cursor: pointer;"><i class="fas fa-edit"></i> Edit</button>
+                            <button class="refresh-detail-btn" style="background: #1e293b; color:white; border: none; border-radius: 40px; padding: 8px 20px; font-weight: 500; cursor: pointer;"><i class="fas fa-sync-alt"></i> Refresh data</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            const editBtn = detailsContainer.querySelector('.edit-detail-btn');
+            if (editBtn) editBtn.addEventListener('click', () => { alert(`Edit chart: ${selectedChart.chart_title}`); });
+            const refreshBtn = detailsContainer.querySelector('.refresh-detail-btn');
+            if (refreshBtn) refreshBtn.addEventListener('click', () => { alert("Data synchronized (simulated)."); });
+        }
+
+        function CreateChartHandler() {
+            const newId = "CH-" + (Math.floor(Math.random() * 9000) + 1000);
+            const newTitle = "New Chart " + (mockCharts.length + 1);
+            const newKey = "new_key_" + Date.now();
+            mockCharts.push({ chart_id: newId, chart_title: newTitle, chart_key: newKey, seats: 24, status: "Active" });
+            selectedChartId = newId;
+            localStorage.setItem('selectedChartId', selectedChartId);
+            renderCharts();
+            renderDetails();
+            alert(`✨ Chart "${newTitle}" created successfully!`);
+        }
+
+        function escapeHtml(str) { return String(str).replace(/[&<>]/g, function(m){if(m==='&') return '&amp;'; if(m==='<') return '&lt;'; if(m==='>') return '&gt;'; return m;}); }
+
+        // search change listener
+        const searchInput = document.getElementById('searchBox');
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                searchText = e.target.value;
+                renderCharts();
+                // keep details if selected chart still exists in filtered but fine
+            });
+        }
+        // add create chart via left button
+        const createBtnLeft = document.querySelector('.create-chart-card');
+        if (createBtnLeft) createBtnLeft.addEventListener('click', CreateChartHandler);
+
+        // initial render
+        renderCharts();
+        renderDetails();
+
+        // also ensure global functions for Blazor style (just in case)
+        window.CreateChart = CreateChartHandler;
+        window.SelectChart = (id) => { selectedChartId = id; localStorage.setItem('selectedChartId', selectedChartId); renderCharts(); renderDetails(); };
+        window.EditChart = (id) => { alert(`Edit chart ${id}`); };
+        window.RefreshChart = () => { alert("Manual refresh done."); };
+
+
+
+
+        document.querySelectorAll('.tab-btn').forEach(button => {
+            debugger;
+            button.addEventListener('click', () => {
+
+                document.querySelectorAll('.tab-btn').forEach(btn =>
+                    btn.classList.remove('active')
+                );
+
+                document.querySelectorAll('.tab-pane').forEach(tab =>
+                    tab.classList.remove('active')
+                );
+
+                button.classList.add('active');
+
+                document
+                    .getElementById(button.dataset.tab)
+                    .classList.add('active');
+            });
+        });
+
+        function CopyText(text) {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text)
+                    .then(() => console.log("Copied"))
+                    .catch(err => console.error("Copy failed:", err));
+            } else {
+                // Fallback for older browsers
+                const textarea = document.createElement("textarea");
+                textarea.value = text;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand("copy");
+                document.body.removeChild(textarea);
+            }
+        }
+        function setupOutsideClick(dotNetRef) {
+            document.addEventListener('click', function (e) {
+                const dropdown = document.querySelector('.terracotta-dropdown');
+                if (dropdown && !dropdown.contains(e.target)) {
+                    dotNetRef.invokeMethodAsync('CloseDropdown');
+                }
+            });
+        }
+             
+    </script>
+</body>
+</html>
