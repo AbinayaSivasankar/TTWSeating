@@ -198,39 +198,175 @@
         position: absolute;
         right: 0;
         top: 42px;
+        width: min(330px, calc(100vw - 24px));
         background: #fff;
         border: 1px solid var(--line);
-        border-radius: 12px;
-        min-width: 200px;
-        padding: 6px;
+        border-radius: 22px;
+        overflow: hidden;
         z-index: 60;
-        box-shadow: 0 12px 32px #1e254026;
+        box-shadow: 0 14px 40px #00000024;
         font-weight: 400;
-        color: var(--tx)
+        color: var(--tx);
+        cursor: default;
+        text-align: left
     }
 
         .mn.show {
             display: block
         }
 
-        .mn div {
-            padding: 8px 10px;
-            color: var(--mu);
-            font-size: 12px;
-            border-bottom: 1px solid var(--line);
-            margin-bottom: 4px
+    .pm-head {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 16px
+    }
+
+    .pm-av {
+        flex: 0 0 40px;
+        display: grid;
+        place-items: center;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: var(--ac);
+        color: #fff;
+        font-weight: 700
+    }
+
+    .pm-who {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 2px
+    }
+
+    .pm-name, .pm-email {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap
+    }
+
+    .pm-name {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--tx)
+    }
+
+    .pm-email {
+        font-size: 12px;
+        color: var(--mu)
+    }
+
+    .pm-sec {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        padding: 14px 16px 16px;
+        border-top: 1px solid var(--line)
+    }
+
+    .pm-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        font-weight: 600
+    }
+
+    .pm-hint {
+        font-size: 11px;
+        line-height: 1.4;
+        color: var(--mu)
+    }
+
+    .pk {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 10px 10px 10px 14px;
+        border-radius: 16px;
+        background: var(--soft)
+    }
+
+    .pk-top, .pk-field {
+        display: flex;
+        align-items: center;
+        gap: 6px
+    }
+
+    .pk-top {
+        justify-content: space-between
+    }
+
+    .pk-label {
+        font-size: 12px;
+        font-weight: 600
+    }
+
+    .pk-badge {
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 10px;
+        font-weight: 600
+    }
+
+        .pk-badge.pub {
+            background: #e7f8ef;
+            color: #168a4c
         }
 
-        .mn button {
-            width: 100%;
-            text-align: left;
-            padding: 8px 10px;
-            border-radius: 8px
+        .pk-badge.sec {
+            background: #fde8e9;
+            color: var(--dg)
         }
 
-            .mn button:hover {
-                background: var(--soft)
-            }
+    .pk-val {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-family: 'IBM Plex Mono', Consolas, monospace;
+        font-size: 11px
+    }
+
+    .pk-btn {
+        flex: 0 0 30px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        background: #fff;
+        color: var(--tx)
+    }
+
+        .pk-btn:hover {
+            background: var(--acs);
+            color: var(--ac)
+        }
+
+    .pm-foot {
+        padding: 8px;
+        border-top: 1px solid var(--line)
+    }
+
+    .pm-logout {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        padding: 8px 10px;
+        border-radius: 8px;
+        font-weight: 600;
+        text-align: left
+    }
+
+        .pm-logout:hover {
+            background: var(--soft)
+        }
 
     .bar {
         background: var(--pan);
@@ -1075,7 +1211,7 @@
         <button class="bt" id="cancel" @onclick="CancelChart"><i class="fa-solid fa-xmark"></i> Cancel</button>
         <button class="bt" id="copy" @onclick="CopyChart"><i class="fa-regular fa-copy"></i> Copy chart</button>
         <button class="bt pr" id="save" @onclick="SaveChart"><i class="fa-regular fa-floppy-disk"></i> Save layout</button>
-        <div class="av" id="av">D<div class="mn" id="mn"><div>user@email.com</div><button id="logout" @onclick="Logout"><i class="fa-solid fa-arrow-right-from-bracket"></i> Logout</button></div></div>
+        <div class="av" id="av">D<div class="mn" id="mn"><div class="pm-head"><span class="pm-av" id="pmAv">?</span><div class="pm-who"><span class="pm-name" id="pmName">My account</span><span class="pm-email" id="pmEmail"></span></div></div><div class="pm-sec"><div class="pm-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4"></circle><path d="m11 12 9-9M16 7l3 3M14 9l2 2"></path></svg> API keys</div><div class="pk"><div class="pk-top"><span class="pk-label">Public key</span><span class="pk-badge pub">Client-side</span></div><div class="pk-field"><code class="pk-val" id="pkPub"></code><button type="button" class="pk-btn" id="pkPubCp" title="Copy public key" aria-label="Copy public key"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="13" height="13" rx="2"></rect><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"></path></svg></button></div></div><div class="pk"><div class="pk-top"><span class="pk-label">Secret key</span><span class="pk-badge sec">Server only</span></div><div class="pk-field"><code class="pk-val" id="pkSec"></code><button type="button" class="pk-btn" id="pkEye" title="Show secret key" aria-label="Toggle secret key visibility"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-8 10-8 10 8 10 8-3.5 8-10 8S2 12 2 12Z"></path><circle cx="12" cy="12" r="3"></circle></svg></button><button type="button" class="pk-btn" id="pkSecCp" title="Copy secret key" aria-label="Copy secret key"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="13" height="13" rx="2"></rect><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"></path></svg></button></div></div><p class="pm-hint">Use the public key in your embed. Never expose the secret key in client-side code.</p></div><div class="pm-foot"><button type="button" class="pm-logout" id="logout" @onclick="Logout"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 17l5-5-5-5M15 12H3"></path><path d="M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6"></path></svg> Log out</button></div></div></div>
     </div>
 
     <div class="bar">
@@ -1218,6 +1354,9 @@
     private IJSObjectReference module;
     private string UserId = "0";
     private string UserEmail = "";
+    private string UserName = "";
+    private string PublicKey = "";
+    private string SecretKey = "";
     private string ChartTitle = "Untitled chart";
     private string ChartJson = "";
     private bool _rendered;
@@ -1248,6 +1387,7 @@
             NavManager.NavigateTo("home");
             return;
         }
+        GetUserKeys();
 
         var v = File.GetLastWriteTimeUtc(Path.Combine(Env.WebRootPath, "Script", "chart-editor.js")).Ticks;
         module = await JS.InvokeAsync<IJSObjectReference>("import", $"./Script/chart-editor.js?v={v}");
@@ -1256,6 +1396,9 @@
             title = ChartTitle,
             chartJson = ChartJson,
             email = UserEmail,
+            name = UserName,
+            publicKey = PublicKey,
+            secretKey = SecretKey,
             initial = string.IsNullOrEmpty(UserEmail) ? "?" : UserEmail.Substring(0, 1),
             demo = false          // true = start a new chart with the sample stage / rows / table
         });
@@ -1339,6 +1482,27 @@
     {
         if (module != null && !await module.InvokeAsync<bool>("canLeave")) return;
         NavManager.NavigateTo("home");
+    }
+
+    // same lookup the Home page uses for its account card
+    private void GetUserKeys()
+    {
+        cdlUser objUser = new cdlUser();
+        DataSet ds = new DataSet();
+        NameValueCollection vncParams = new NameValueCollection();
+        vncParams.Add("user_id", UserId);
+        vncParams.Add("public_key", "");
+        vncParams.Add("secret_key", "");
+        vncParams.Add("user_email", "");
+        vncParams.Add("option", "");
+        objUser.GetUser(vncParams, ref ds);
+        if (ds != null && ds.Tables.Count > 0 && ds.Tables[0].Rows.Count > 0)
+        {
+            DataRow dr = ds.Tables[0].Rows[0];
+            PublicKey = dr["public_key"].ToString();
+            SecretKey = dr["secret_key"].ToString();
+            UserName = dr["user_name"].ToString();
+        }
     }
 
     private async Task Logout()

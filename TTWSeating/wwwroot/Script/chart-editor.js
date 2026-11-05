@@ -419,8 +419,20 @@ function boot(opts) {
     T.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') { e.preventDefault(); T.blur() } else if (e.key === 'Escape') { T.blur() } });
     T.addEventListener('keyup', e => e.stopPropagation());
     if (!T.value) setTimeout(() => T.focus(), 60);
-    $('#av').firstChild.nodeValue = (opts.initial || '?').slice(0, 1).toUpperCase();
-    $('#mn>div').textContent = opts.email || '';
+    /* account card - same content as the Home page (name, email, public / secret key) */
+    (function () {
+        const ini = (opts.initial || '?').slice(0, 1).toUpperCase(), pub = opts.publicKey || '', sec = opts.secretKey || '', IC = { copy: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="13" height="13" rx="2"></rect><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"></path></svg>', ok: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"></path></svg>', eye: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-8 10-8 10 8 10 8-3.5 8-10 8S2 12 2 12Z"></path><circle cx="12" cy="12" r="3"></circle></svg>', off: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.9 17.9A10.1 10.1 0 0 1 12 20c-7 0-10-8-10-8a17.7 17.7 0 0 1 4.1-5.4M9.9 4.2A9.7 9.7 0 0 1 12 4c7 0 10 8 10 8a17.8 17.8 0 0 1-2.2 3.2M1 1l22 22M14.1 14.1a3 3 0 1 1-4.2-4.2"></path></svg>' };
+        let vis = false;
+        const mask = k => !k || k.length < 9 ? '\u2022'.repeat(12) : k.slice(0, 4) + '\u2022'.repeat(12) + k.slice(-4);
+        const showSec = () => { $('#pkSec').textContent = vis ? sec : mask(sec); $('#pkSec').title = vis ? sec : 'Hidden'; $('#pkEye').innerHTML = vis ? IC.off : IC.eye; $('#pkEye').title = (vis ? 'Hide' : 'Show') + ' secret key' };
+        const copy = async (t, b) => { if (!t) return; try { await navigator.clipboard.writeText(t) } catch { const a = document.createElement('textarea'); a.value = t; document.body.appendChild(a); a.select(); document.execCommand('copy'); a.remove() } b.innerHTML = IC.ok; setTimeout(() => { b.innerHTML = IC.copy }, 2000) };
+        $('#av').firstChild.nodeValue = ini; $('#pmAv').textContent = ini;
+        $('#pmName').textContent = (opts.name || '').trim() || 'My account'; $('#pmEmail').textContent = opts.email || '';
+        $('#pkPub').textContent = pub; $('#pkPub').title = pub; showSec();
+        $('#pkEye').onclick = () => { vis = !vis; showSec() };
+        $('#pkPubCp').onclick = e => copy(pub, e.currentTarget); $('#pkSecCp').onclick = e => copy(sec, e.currentTarget);
+        $('#av').addEventListener('click', () => { vis = false; showSec() });
+    })();
     $('#title').addEventListener('input', () => { dirty = true });
     let loaded = false;
     if (opts.chartJson) {
