@@ -8,6 +8,7 @@
 @inject NavigationManager NavManager
 @inject IJSRuntime JS
 @inject ProtectedSessionStorage Session
+@inject IWebHostEnvironment Env
 
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
 
@@ -635,10 +636,18 @@
                 border-color: #c9d0e4
             }
 
-        .row2 .dg:hover {
+        .row2 .dg {
+            color: var(--dg);
             border-color: var(--dg);
-            color: var(--dg)
+            background: #fff1f2;
+            font-weight: 600
         }
+
+            .row2 .dg:hover {
+                background: var(--dg);
+                border-color: var(--dg);
+                color: #fff
+            }
 
     .er {
         display: none;
@@ -1042,6 +1051,7 @@
             font: 600 13px system-ui, sans-serif;
             color: #6b7694
         }
+
     @@keyframes ldrSpin {
         to {
             transform: rotate(360deg)
@@ -1135,14 +1145,14 @@
                     <div class="sh">Icon</div><div class="icg" id="icGrid"></div>
                     <div class="g2" style="margin-top:12px"><div class="f"><label>Size</label><input type="number" id="icSize" min="12" max="400"></div><div class="f"><label>Color</label><input type="color" id="icColor" style="width:100%;height:34px;border-radius:8px;border:1px solid var(--line);padding:2px"></div></div>
                     <div class="f"><label>Rotation <span id="icRv" style="float:right"></span></label><input type="range" id="icRot" min="0" max="345" step="5"></div>
-                    <div class="row2"><button id="icDup"><i class="fa-regular fa-clone"></i> Duplicate</button><button class="dg" id="icDel"><i class="fa-regular fa-trash-can"></i></button></div>
+                    <div class="row2"><button id="icDup"><i class="fa-regular fa-clone"></i> Duplicate</button><button class="dg" id="icDel"><i class="fa-regular fa-trash-can"></i> Delete</button></div>
                 </div>
                 <div id="lineBox" style="display:none">
                     <div class="sh">Line</div>
                     <div class="f"><label>Type</label><select id="lnT"><option value="lsolid">Solid</option><option value="ldash">Dashed</option><option value="ldot">Dotted</option></select></div>
                     <label class="ck"><span>Arrow at end</span><input type="checkbox" id="lnA"></label>
                     <div class="g2"><div class="f"><label>Width</label><input type="number" id="lnW" min="1" max="30"></div><div class="f"><label>Color</label><input type="color" id="lnC" style="width:100%;height:34px;border-radius:8px;border:1px solid var(--line);padding:2px"></div></div>
-                    <div class="row2"><button id="lnDup"><i class="fa-regular fa-clone"></i> Duplicate</button><button class="dg" id="lnDel"><i class="fa-regular fa-trash-can"></i></button></div>
+                    <div class="row2"><button id="lnDup"><i class="fa-regular fa-clone"></i> Duplicate</button><button class="dg" id="lnDel"><i class="fa-regular fa-trash-can"></i> Delete</button></div>
                 </div>
                 <div id="seatBox" style="display:none">
                     <div class="sh">Seat <span id="ssN" style="text-transform:none;letter-spacing:0"></span></div>
@@ -1188,7 +1198,7 @@
                     <div class="f" id="fRot"><label>Rotation <span id="rv" style="float:right"></span></label><input type="range" id="sRot" min="0" max="345" step="5"></div>
                     <button class="ap" id="apply"><i class="fa-solid fa-check"></i> Apply changes</button>
                     <div class="er" id="se" style="margin:8px 0 0"></div>
-                    <div class="row2"><button id="dup" title="Ctrl+D"><i class="fa-regular fa-clone"></i> Duplicate</button><button id="rot90"><i class="fa-solid fa-rotate-right"></i> 90°</button><button class="dg" id="del" title="Del"><i class="fa-regular fa-trash-can"></i></button></div>
+                    <div class="row2"><button id="dup" title="Ctrl+D"><i class="fa-regular fa-clone"></i> Duplicate</button><button id="rot90"><i class="fa-solid fa-rotate-right"></i> 90°</button><button class="dg" id="del" title="Del"><i class="fa-regular fa-trash-can"></i> Delete</button></div>
                     <div class="row2"><button id="selCatAll"><i class="fa-solid fa-object-group"></i> Select all in category</button></div>
                 </div>
             </div>
@@ -1239,7 +1249,8 @@
             return;
         }
 
-        module = await JS.InvokeAsync<IJSObjectReference>("import", "./Script/chart-editor.js");
+        var v = File.GetLastWriteTimeUtc(Path.Combine(Env.WebRootPath, "Script", "chart-editor.js")).Ticks;
+        module = await JS.InvokeAsync<IJSObjectReference>("import", $"./Script/chart-editor.js?v={v}");
         await module.InvokeVoidAsync("init", new
         {
             title = ChartTitle,
@@ -1288,7 +1299,7 @@
             await module.InvokeVoidAsync("markSaved");
             await Session.SetAsync("FlashMessage", $"Layout saved ({d.SeatCount} seats)");
             NavManager.NavigateTo("home");
-           
+
         }
         catch (Exception ex)
         {

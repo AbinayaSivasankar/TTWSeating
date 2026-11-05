@@ -9435,7 +9435,7 @@ function saveHoldToken(chartId, selectedSeats, holdToken) {
     debugger;
     const url = `http://localhost:5045/api/chart/Update?chartId=${chartId}&seats=${selectedSeats}&holdToken=${holdToken}`;
 
-   // const url = `https://localhost:7203/api/chart/Update?chartId=${chartId}&seats=${selectedSeats}&holdToken=${holdToken}`;
+    // const url = `https://localhost:7203/api/chart/Update?chartId=${chartId}&seats=${selectedSeats}&holdToken=${holdToken}`;
     //const url = `http://dev.theticketworld.com/seating_api/api/chart/Update?chartId=${chartId}&seats=${selectedSeats}&holdToken=${holdToken}`;
 
     fetch(url, {
@@ -9568,7 +9568,7 @@ function saveChartAsNew() {
 }
 async function getAvailableCount(chartId, categoryName) {
     debugger;
-   // const url = `https://localhost:7203/api/chart/GetCount?chartId=${chartId}&catname=${encodeURIComponent(categoryName)}`;
+    // const url = `https://localhost:7203/api/chart/GetCount?chartId=${chartId}&catname=${encodeURIComponent(categoryName)}`;
     const url = `http://localhost:5045/api/chart/GetCount?chartId=${chartId}&catname=${encodeURIComponent(categoryName)}`;
 
     try {
@@ -9638,6 +9638,22 @@ async function getAvailableCount(chartId, categoryName) {
         info: '<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 11v6M12 7.5v.01" fill="none" stroke="currentColor" stroke-width="2"/>',
         lift: '<path d="M5 3h14v18H5zM9 10l3-3 3 3M9 14l3 3 3-3" fill="none" stroke="currentColor" stroke-width="2"/>'
     };
+    const icS = d => `<path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="${d}"/>`, icC = (x, y, r) => `<circle fill="currentColor" cx="${x}" cy="${y}" r="${r}"/>`;
+    const SI = {
+        wheelchair: ICONS.wheelchair,
+        companion: icC(8, 5, 2.2) + icS('M4 20v-6a4 4 0 018 0v6') + icC(17, 8, 2) + icS('M14 20v-4a3 3 0 016 0v4'),
+        accessible: icC(12, 4, 2.2) + icS('M12 8v7M7 11h10M12 15l-3 6M12 15l3 6'),
+        hear: icS('M7 9a5 5 0 0110 0c0 3-3 4-3 7a2.5 2.5 0 01-5 0M9.5 9a2.5 2.5 0 015 0'),
+        cart: icS('M4 6h16v12H4zM8 11h3M13 11h3M8 15h8'),
+        sign: icS('M8 13V5.5a1.5 1.5 0 013 0V11M11 10V4a1.5 1.5 0 013 0v7M14 10V5.5a1.5 1.5 0 013 0V13M17 9.5a1.5 1.5 0 013 0V14a7 7 0 01-7 7h-1a7 7 0 01-5.5-2.7L4 14.5'),
+        res: icS('M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM3 3l18 18') + icC(12, 12, 2.4),
+        ver: icS('M3 21h5v-5h5v-5h5V6M20 9v6M17.5 12.5l2.5 2.5 2.5-2.5'),
+        leg: icS('M7 3v10h8l2 8M4 21h16'),
+        arm: icS('M5 20v-6h14v6M7 14V9M17 14V9M12 4v5M9 6.5l3-3 3 3')
+    };
+    const SN = { wheelchair: 'Wheelchair space', companion: 'Companion seat', accessible: 'Accessible seat', hear: 'Hearing impaired', cart: 'CART services', sign: 'Sign language interpretation', res: 'Restricted view', ver: 'Not suitable for vertigo sufferers', leg: 'Limited legroom', arm: 'Lift-up armrests' };
+    const FLAGS = ['hear', 'res', 'ver', 'leg', 'arm'];
+    const seatAccNotes = sd => [sd.acc && SN[sd.acc]].concat(FLAGS.filter(k => sd[k]).map(k => SN[k]), sd.hear && sd.cart ? [SN.cart] : [], sd.hear && sd.sign ? [SN.sign] : []).flat().filter(Boolean);
     const svgEl = (name, attrs, parent) => { const n = document.createElementNS(NS, name); Object.entries(attrs || {}).forEach(([k, v]) => { if (v !== undefined && v !== null) n.setAttribute(k, String(v)) }); if (parent) parent.appendChild(n); return n; };
     const text = (parent, x, y, str, attrs = {}) => { const n = svgEl('text', { x, y, 'dominant-baseline': 'auto', ...attrs }, parent); n.textContent = str == null ? '' : String(str); return n; };
     const catMap = (cats, id) => cats.find(c => String(c.id) === String(id)) || { color: '#888', name: '—' };
@@ -9655,12 +9671,19 @@ async function getAvailableCount(chartId, categoryName) {
         const seatLookup = new Map(); seatRows.forEach(r => seatLookup.set(String(r.seat_name || r.seat || ''), r));
         shapes.slice().sort((a, b) => (b.type === 'focal') - (a.type === 'focal')).forEach(s => {
             const c = catMap(cats, s.cat).color, cc = center(s), g = svgEl('g', { transform: `rotate(${s.rot || 0} ${cc.x} ${cc.y})` }, svg);
-            if (s.type === 'row') { const q = rowSeats(s); q.p.forEach((p, i) => { const sd = (s.sd && s.sd[i]) || {}, seatName = (s.label || '') + '-' + (sd.label || p.l), db = seatLookup.get(seatName), cat = catMap(cats, sd.cat || s.cat), fill = cat.color; const circle = svgEl('circle', { cx: p.x, cy: p.y, r: R, fill, stroke: '#fff', 'stroke-width': 1.5, 'data-seat': seatName, tabindex: 0 }, g); const tip = [`Row: ${s.label || ''}`, `Seat: ${sd.label || p.l}`, `Category: ${cat.name}`, db?.status ? `Status: ${db.status}` : ''].filter(Boolean).join('\n'); circle.addEventListener('mouseenter', () => showTip(host, tip)); circle.addEventListener('mouseleave', hideTip); circle.addEventListener('focus', () => showTip(host, tip)); circle.addEventListener('blur', hideTip); if (showSeats) text(g, p.x, p.y + 3, sd.label || p.l, { 'text-anchor': 'middle', 'font-size': 8, 'font-weight': 600, fill: '#fff', 'pointer-events': 'none' }); }); const l = q.p[0].x <= q.p[q.p.length - 1].x ? q.p[0] : q.p[q.p.length - 1]; if (showRows && s.lblOn !== false) text(g, l.x - 22, l.y + 4, s.label, { 'text-anchor': 'middle', 'font-size': 12, 'font-weight': 700, fill: '#64708f' }); }
+            if (s.type === 'row') {
+                const q = rowSeats(s); q.p.forEach((p, i) => {
+                    const sd = (s.sd && s.sd[i]) || {}, seatName = (s.label || '') + '-' + (sd.label || p.l), db = seatLookup.get(seatName), cat = catMap(cats, sd.cat || s.cat), fill = cat.color; const circle = svgEl('circle', { cx: p.x, cy: p.y, r: R, fill, stroke: '#fff', 'stroke-width': 1.5, 'data-seat': seatName, tabindex: 0 }, g); const tip = [`Row: ${s.label || ''}`, `Seat: ${sd.label || p.l}`, `Category: ${cat.name}`, db?.status ? `Status: ${db.status}` : '', ...seatAccNotes(sd)].filter(Boolean).join('\n'); circle.addEventListener('mouseenter', () => showTip(host, tip)); circle.addEventListener('mouseleave', hideTip); circle.addEventListener('focus', () => showTip(host, tip)); circle.addEventListener('blur', hideTip); const hasAcc = sd.acc && SI[sd.acc], fk = FLAGS.filter(k => sd[k]);
+                    if (hasAcc) svgEl('g', { style: 'color:#fff', transform: `translate(${p.x - 7} ${p.y - 7}) scale(${14 / 24})`, 'pointer-events': 'none' }, g).innerHTML = SI[sd.acc];
+                    else if (showSeats) text(g, p.x, p.y + 3, sd.label || p.l, { 'text-anchor': 'middle', 'font-size': 8, 'font-weight': 600, fill: '#fff', 'pointer-events': 'none' });
+                    if (fk.length) { const bx = p.x + R - 1, by = p.y - R + 1; svgEl('circle', { cx: bx, cy: by, r: 5.6, fill: '#f59e0b', stroke: '#fff', 'stroke-width': 1.2, 'pointer-events': 'none' }, g); if (fk.length === 1) svgEl('g', { style: 'color:#fff', transform: `translate(${bx - 3.6} ${by - 3.6}) scale(${7.2 / 24})`, 'pointer-events': 'none' }, g).innerHTML = SI[fk[0]]; else text(g, bx, by + 3, fk.length, { 'text-anchor': 'middle', 'font-size': 8, 'font-weight': 700, fill: '#fff', 'pointer-events': 'none' }); }
+                }); const l = q.p[0].x <= q.p[q.p.length - 1].x ? q.p[0] : q.p[q.p.length - 1]; if (showRows && s.lblOn !== false) text(g, l.x - 22, l.y + 4, s.label, { 'text-anchor': 'middle', 'font-size': 12, 'font-weight': 700, fill: '#64708f' });
+            }
             else if (s.type === 'table') { const tableFill = c + '33', stroke = c; if (s.shape === 'rect') svgEl('rect', { x: s.x - s.w / 2, y: s.y - s.h / 2, width: s.w, height: s.h, rx: 8, fill: tableFill, stroke, 'stroke-width': 1.5 }, g); else svgEl('circle', { cx: s.x, cy: s.y, r: s.r, fill: tableFill, stroke, 'stroke-width': 1.5 }, g); tableSeats(s).forEach((p, i) => { const cat = catMap(cats, s.cat), seatName = (s.label || 'T') + '-' + (i + 1), tip = `Table: ${s.label || ''}\nSeat: ${i + 1}\nCategory: ${cat.name}`; const el = svgEl('circle', { cx: p.x, cy: p.y, r: R, fill: cat.color, stroke: '#fff', 'stroke-width': 1.5, tabindex: 0, 'data-seat': seatName }, g); el.addEventListener('mouseenter', () => showTip(host, tip)); el.addEventListener('mouseleave', hideTip); if (showSeats) text(g, p.x, p.y + 3, String(i + 1), { 'text-anchor': 'middle', 'font-size': 8, 'font-weight': 600, fill: '#fff', 'pointer-events': 'none' }); }); text(g, s.x, s.y + 4, s.label, { 'text-anchor': 'middle', 'font-size': 13, 'font-weight': 700, fill: '#1e2540' }); }
             else if (s.type === 'icon') { const ig = svgEl('g', { transform: `translate(${s.x - s.size / 2} ${s.y - s.size / 2}) scale(${s.size / 24})`, style: `color:${s.color || '#1e2540'}` }, g); ig.innerHTML = ICONS[s.ic] || ''; }
             else if (s.type === 'line') { const dx = s.x2 - s.x1, dy = s.y2 - s.y1, len = Math.hypot(dx, dy) || 1, ux = dx / len, uy = dy / len, hs = 6 + (s.w || 3) * 2; svgEl('line', { x1: s.x1, y1: s.y1, x2: s.arrow ? s.x2 - ux * hs * .6 : s.x2, y2: s.arrow ? s.y2 - uy * hs * .6 : s.y2, stroke: s.color || '#1e2540', 'stroke-width': s.w || 3, 'stroke-dasharray': s.dash || '0' }, g); if (s.arrow) svgEl('polygon', { points: `${s.x2},${s.y2} ${s.x2 - ux * hs - uy * hs * .5},${s.y2 - uy * hs + ux * hs * .5} ${s.x2 - ux * hs + uy * hs * .5},${s.y2 - uy * hs - ux * hs * .5}`, fill: s.color || '#1e2540' }, g); }
             else if (s.type === 'text') text(g, s.x, s.y, s.text || 'Text', { 'font-size': s.size || 18, 'font-weight': 600, fill: s.color || '#1e2540' });
-            else if (s.type === 'focal') { const R0 = s.r || 120, gid = 'chartFocal' + Math.random().toString(36).slice(2, 8), df = svgEl('defs', {}, g), gr = svgEl('radialGradient', { id: gid }, df);[[0, .5], [.45, .3], [.8, .1], [1, 0]].forEach(([o, a]) => svgEl('stop', { offset: o, 'stop-color': '#ef4444', 'stop-opacity': a }, gr)); svgEl('circle', { cx: s.x, cy: s.y, r: R0, fill: `url(#${gid})`, 'pointer-events': 'none' }, g); svgEl('circle', { cx: s.x, cy: s.y, r: 7, fill: '#ef4444', stroke: '#fff', 'stroke-width': 2, 'pointer-events': 'none' }, g); text(g, s.x + 14, s.y - 12, 'Focal point', { 'font-size': 11, 'font-weight': 700, fill: '#ef4444', 'pointer-events': 'none' }); }
+            else if (s.type === 'focal') { const R0 = s.r || 120, gid = 'chartFocal' + Math.random().toString(36).slice(2, 8), df = svgEl('defs', {}, g), gr = svgEl('radialGradient', { id: gid }, df);[[0, .5], [.45, .3], [.8, .1], [1, 0]].forEach(([o, a]) => svgEl('stop', { offset: o, 'stop-color': '#ef4444', 'stop-opacity': a }, gr)); svgEl('circle', { cx: s.x, cy: s.y, r: R0, fill: `url(#${gid})`, 'pointer-events': 'none' }, g); }
             else { const isRect = s.type === 'rect', shape = s.shape || 'rect'; if (shape === 'poly' && s.pts) svgEl('polygon', { points: s.pts.map(p => `${p.x},${p.y}`).join(' '), fill: isRect ? '#e6e9f4' : c + '2a', stroke: isRect ? '#b9c1da' : c, 'stroke-width': 1.5, 'stroke-dasharray': s.type === 'general' ? '7 5' : '0' }, g); else if (shape === 'circle') svgEl('ellipse', { cx: s.x + s.w / 2, cy: s.y + s.h / 2, rx: s.w / 2, ry: s.h / 2, fill: isRect ? '#e6e9f4' : c + '2a', stroke: isRect ? '#b9c1da' : c, 'stroke-width': 1.5, 'stroke-dasharray': s.type === 'general' ? '7 5' : '0' }, g); else svgEl('rect', { x: s.x, y: s.y, width: s.w, height: s.h, rx: 10, fill: isRect ? '#e6e9f4' : c + '2a', stroke: isRect ? '#b9c1da' : c, 'stroke-width': 1.5, 'stroke-dasharray': s.type === 'general' ? '7 5' : '0' }, g); text(g, s.x + s.w / 2, s.y + s.h / 2 + 5, s.label || '', { 'text-anchor': 'middle', 'font-size': 14, 'font-weight': 600, fill: '#1e2540' }); if (s.type === 'general') text(g, s.x + s.w / 2, s.y + s.h / 2 + 23, (s.cap || 0) + ' capacity', { 'text-anchor': 'middle', 'font-size': 11, fill: '#7a85a6' }); }
         });
         if (!document.getElementById('chartPreviewTooltipStyle')) { const style = document.createElement('style'); style.id = 'chartPreviewTooltipStyle'; style.textContent = '.chart-preview-tip{position:fixed;z-index:99999;display:none;pointer-events:none;white-space:pre-line;background:#202438;color:#fff;padding:7px 10px;border-radius:6px;font:12px/1.45 system-ui,sans-serif;box-shadow:0 4px 16px #0002}'; document.head.appendChild(style) }
