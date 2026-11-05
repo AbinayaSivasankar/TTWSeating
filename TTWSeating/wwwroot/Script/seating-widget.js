@@ -93,6 +93,9 @@ window.fabricInterop = {
     _isScaling: false,
 
     initCanvas(canvasId, width, height) {
+        undoStack = [];
+        redoStack = [];
+        this.resetChartState("seatCanvas");
         canvas = new fabric.Canvas(canvasId, {
             selection: true,
             width: document.getElementById(canvasId).parentElement.clientWidth,
@@ -493,6 +496,7 @@ window.fabricInterop = {
                 this.handleRowSelection(canvas, e);
                 this.handleSelectionChanged(canvasId, e);
                 this.populateRowProperties(canvasId);
+                this.populateRectangleProperties(canvasId);
             }
         });
 
@@ -501,6 +505,7 @@ window.fabricInterop = {
                 this.handleRowSelection(canvas, e);
                 this.handleSelectionChanged(canvasId, e);
                 this.populateRowProperties(canvasId);
+                this.populateRectangleProperties(canvasId);
             }
         });
 
@@ -508,6 +513,8 @@ window.fabricInterop = {
             if (this.mode === "select") {
                 this.handleSelectionCleared(canvasId);
                 this.clearRowPropertiesUI();
+                const ddlRect = document.getElementById("ddlrect");
+                if (ddlRect) ddlRect.value = "";
             }
         });
 
@@ -1249,7 +1256,7 @@ window.fabricInterop = {
             let priceObj = window.globalPriceList.find(x => x.category === categoryId);
             // let price = priceObj ? priceObj.price : "Unknown";
             let price = "Unknown";
-            if (priceObj.ticketTypes == null) {
+            if (!priceObj || priceObj.ticketTypes == null) {
                 price = priceObj ? priceObj.price : "Unknown";
             }
             else {
@@ -2514,6 +2521,7 @@ window.fabricInterop = {
             this.removeRowLabelsForRow(canvas, rowSeats);
             // Create new label text
             const rowText = this.addRowLabel(canvasId, labelX, labelY, inputLabel);
+            rowText.originalPosition = { x: labelX, y: labelY };
 
             // Apply the label to each seat and store the format
             rowSeats.forEach(seat => {
@@ -2609,7 +2617,7 @@ window.fabricInterop = {
             this.removeRowLabelsForRow(canvas, rowSeats);
             // Create new label text
             const rowText = this.addRowLabel(canvasId, labelX, labelY, rowLabel);
-
+            rowText.originalPosition = { x: labelX, y: labelY };
             // Apply label to each seat and store the format
             rowSeats.forEach(seat => {
                 seat.set('rowLabel', rowLabel);
@@ -2826,6 +2834,7 @@ window.fabricInterop = {
     },
 
     saveLayout(canvasId) {
+        debugger;
         safeExecute(() => {
             const canvas = this.canvases[canvasId];
             if (!canvas) return;
@@ -2846,8 +2855,9 @@ window.fabricInterop = {
                 'rowLabel', 'rowId', 'isRowLabel', 'seatStatus',
                 'objectType', 'createdBy', 'rectangleId', 'rectangleLabel', 'rectangleIcon',
                 'categoryId', 'categoryName', 'capacity', 'generalLabel', 'seatLabelFormat', 'customLabelStart',
-                'rowLabelFormat', 'rowLabelCustomStart'
+                'rowLabelFormat', 'rowLabelCustomStart', 'curveType', 'curveIntensity', 'curveRadius'
             ]);
+            debugger;
             const jsonStr = JSON.stringify(json);
             if (json.objects.length > 0) {
                 DotNet.invokeMethodAsync("TTWSeating", "SaveSeatingLayout", jsonStr, "New", "");
@@ -2949,6 +2959,10 @@ window.fabricInterop = {
     },
     loadLayout(canvasId, jsonString) {
         const canvas = this.canvases[canvasId];
+        if (!canvas) {
+            console.error("loadLayout: canvas not initialized for", canvasId);
+            return;
+        }
 
         let json;
         try {
@@ -2958,15 +2972,90 @@ window.fabricInterop = {
             return;
         }
 
+        undoStack = [];
+        redoStack = [];
         canvas.clear();
 
-        if (!json.objects || !Array.isArray(json.objects)) {
-            console.error("No objects array in JSON");
+        const shapes = Array.isArray(json.shapes) ? json.shapes : [];
+        const objects = Array.isArray(json.objects) ? json.objects : [];
+        this._designerCats = Array.isArray(json.cats) ? json.cats : [];
+        const seatIdMap = this.buildDesignerSeatIds(shapes, objects);
+
+        if (json.view && typeof json.view === 'object') {
+            const view = json.view;
+            if (typeof view.k === 'number') canvas.setZoom(view.k);
+            if (Array.isArray(canvas.viewportTransform)) {
+                canvas.viewportTransform[4] = view.x || 0;
+                canvas.viewportTransform[5] = view.y || 0;
+            }
+        }
+
+        if (!shapes.length && !objects.length) {
+            console.warn("No objects/shapes in JSON; chart may be empty or not saved in editor format.");
             return;
         }
 
-        // Load shapes and seats
-        json.objects.forEach((objData) => {
+        if (shapes.length) {
+            shapes.forEach((shape) => {
+                if (!shape) return;
+                if (shape.type === 'row') this.recreateDesignerRow(canvas, shape, seatIdMap.get(shape.id));
+                else if (shape.type === 'table') this.recreateDesignerTable(canvas, shape, seatIdMap.get(shape.id));
+                else if (shape.type === 'general') this.recreateDesignerGeneral(canvas, shape);
+                else if (shape.type === 'rect') this.recreateDesignerRect(canvas, shape);
+                else if (shape.type === 'line') this.recreateDesignerLine(canvas, shape);
+                else if (shape.type === 'text') this.recreateDesignerText(canvas, shape);
+                else if (shape.type === 'icon') this.recreateDesignerIcon(canvas, shape);
+            });
+        }
+
+        if (shapes.length) {
+            shapes.forEach((shape) => {
+                if (!shape || shape.type !== 'row') return;
+                const rowLabel = shape.label || '';
+                if (!rowLabel) return;
+                if (canvas.getObjects().some(o => o.isRowLabel && o.rowLabel === rowLabel)) return;
+                const firstSeat = canvas.getObjects().find(obj => obj.rowLabel === rowLabel && obj.type === 'group');
+                if (!firstSeat) return;
+                const label = new fabric.Text(rowLabel, {
+                    left: firstSeat.left - 24,
+                    top: firstSeat.top,
+                    fontSize: 12,
+                    fontWeight: 700,
+                    fill: '#64708f',
+                    originX: 'center',
+                    originY: 'center',
+                    selectable: false,
+                    evented: false,
+                    isRowLabel: true,
+                    rowLabel: rowLabel
+                });
+                canvas.add(label);
+            });
+        }
+
+        if (shapes.length) {
+            shapes.forEach((shape) => {
+                if (!shape || !(shape.type === 'general' || shape.type === 'rect')) return;
+                if (!shape.label) return;
+                const centerX = (shape.x || 0) + ((shape.w || 0) / 2);
+                const centerY = (shape.y || 0) + ((shape.h || 0) / 2);
+                const label = new fabric.Text(shape.label, {
+                    left: centerX,
+                    top: centerY,
+                    fontSize: 14,
+                    fontWeight: 700,
+                    fill: '#1e2540',
+                    originX: 'center',
+                    originY: 'center',
+                    selectable: false,
+                    evented: false
+                });
+                canvas.add(label);
+            });
+        }
+
+        objects.forEach((objData) => {
+            if (!objData) return;
             if (objData.objectType === 'genrectangle') {
                 this.recreateGeneralRectangleFromData(canvas, objData);
             }
@@ -2978,15 +3067,11 @@ window.fabricInterop = {
             }
         });
 
-        // Load labels
-        json.objects.forEach((objData) => {
-
-            if (objData.type === "text" || objData.type === "i-text") {
-
+        if (objects.length) {
+            objects.forEach((objData) => {
+                if (!objData || !(objData.type === "text" || objData.type === "i-text")) return;
                 if (objData.isRowLabel === true) {
-
                     const textValue = objData.text || objData.rowLabel || "";
-
                     const rowText = new fabric.Text(textValue, {
                         left: objData.left || 0,
                         top: objData.top || 0,
@@ -3004,28 +3089,22 @@ window.fabricInterop = {
 
                     rowText.set('isRowLabel', true);
                     rowText.set('rowLabel', rowText.rowLabel);
-
+                    rowText.originalPosition = { x: rowText.left, y: rowText.top };
                     canvas.add(rowText);
                 }
                 else if (objData.isRectangleLabel === true || objData.generalLabel) {
                     this.recreateRectangleLabel(canvas, objData);
                 }
-            }
-        });
+            });
+        }
+
         this.linkRowLabelsToSeats(canvas);
-        // Render first
         canvas.renderAll();
-
-        // Fit and center
         this.fitAndCenterChart(canvas);
-
-        // VERY IMPORTANT - refresh hit detection
         canvas.calcOffset();
 
         canvas.forEachObject((obj) => {
             obj.setCoords();
-
-            // Update coords for group children too
             if (obj.type === "group" && obj._objects) {
                 obj._objects.forEach((child) => {
                     child.setCoords();
@@ -3034,6 +3113,355 @@ window.fabricInterop = {
         });
 
         canvas.requestRenderAll();
+    },
+    recreateDesignerRow(canvas, shape, ids) {
+        const seatCount = shape.count || 0;
+        if (!seatCount) return;
+
+        const rowSeats = [];
+        const rowLabel = shape.label || '';
+
+        for (let i = 0; i < seatCount; i++) {
+            let x = 0;
+            let y = 0;
+
+            if (shape.pts && shape.pts.length > 1) {
+                const total = shape.pts.length - 1;
+                const dist = (i / Math.max(1, seatCount - 1)) * total;
+                const idx = Math.floor(dist);
+                const t = dist - idx;
+                const a = shape.pts[idx];
+                const b = shape.pts[Math.min(shape.pts.length - 1, idx + 1)];
+                x = a.x + (b.x - a.x) * t;
+                y = a.y + (b.y - a.y) * t;
+            } else {
+                const dx = (shape.x2 || shape.x1 || 0) - (shape.x1 || 0);
+                const dy = (shape.y2 || shape.y1 || 0) - (shape.y1 || 0);
+                const len = Math.hypot(dx, dy) || 1;
+                const mx = ((shape.x1 + (shape.x2 || shape.x1)) / 2) + (-dy / len) * (shape.curve || 0) * 2;
+                const my = ((shape.y1 + (shape.y2 || shape.y1)) / 2) + (dx / len) * (shape.curve || 0) * 2;
+                const t = seatCount > 1 ? i / (seatCount - 1) : 0;
+                const u = 1 - t;
+                x = u * u * (shape.x1 || 0) + 2 * u * t * mx + t * t * (shape.x2 || shape.x1 || 0);
+                y = u * u * (shape.y1 || 0) + 2 * u * t * my + t * t * (shape.y2 || shape.y1 || 0);
+            }
+
+            // same numbering as chart-editor.js seats(): first label + position, counted from the right for rtl rows
+            const sd = (shape.sd && shape.sd[i]) || {};
+            const k = shape.dir === 'rtl' ? seatCount - 1 - i : i;
+            const fromId = ids && ids[i] ? String(ids[i]).split('-').pop().replace(/~\d+$/, '') : '';
+            const seatNumber = String(sd.label || fromId || ((+shape.start || 0) + k)).trim();
+            const seatId = (ids && ids[i]) || (rowLabel || 'R') + '-' + seatNumber;
+            const seatCat = sd.cat || shape.cat;
+
+            rowSeats.push(this.makeDesignerSeat({
+                x, y, label: seatNumber, seatId, rowLabel,
+                color: this.getCategoryColor(seatCat), catId: seatCat,
+                categoryName: this.getCategoryName(seatCat), props: sd
+            }));
+        }
+
+        rowSeats.forEach(seat => canvas.add(seat));
+        if (shape.label) {
+            const rowText = new fabric.Text(shape.label, {
+                left: rowSeats[0] ? rowSeats[0].left - 20 : 0,
+                top: rowSeats[0] ? rowSeats[0].top : 0,
+                fontSize: 12,
+                fontWeight: 700,
+                fill: '#64708f',
+                selectable: false,
+                evented: false,
+                originX: 'center',
+                originY: 'center',
+                isRowLabel: true,
+                rowLabel: shape.label
+            });
+            rowText.set('rowLabel', shape.label);
+            canvas.add(rowText);
+        }
+    },
+    recreateDesignerTable(canvas, shape, ids) {
+        const centerX = shape.x || 0;
+        const centerY = shape.y || 0;
+        const fillColor = shape.cat ? (window.fabricInterop && window.fabricInterop.getCategoryColor ? window.fabricInterop.getCategoryColor(shape.cat) : '#f59e0b') : '#f59e0b';
+
+        if (shape.shape === 'rect') {
+            const rect = new fabric.Rect({
+                left: centerX,
+                top: centerY,
+                width: shape.w || 120,
+                height: shape.h || 60,
+                fill: fillColor + '55',
+                stroke: '#1e2540',
+                strokeWidth: 1.5,
+                originX: 'center',
+                originY: 'center',
+                selectable: false,
+                evented: false,
+                rx: 8,
+                ry: 8
+            });
+            canvas.add(rect);
+        } else {
+            const circle = new fabric.Circle({
+                left: centerX,
+                top: centerY,
+                radius: shape.r || 36,
+                fill: fillColor + '55',
+                stroke: '#1e2540',
+                strokeWidth: 1.5,
+                originX: 'center',
+                originY: 'center',
+                selectable: false,
+                evented: false
+            });
+            canvas.add(circle);
+        }
+
+        const seatPositions = (shape.shape === 'rect')
+            ? (() => {
+                const top = Math.ceil((shape.count || 1) / 2);
+                const bot = (shape.count || 1) - top;
+                const coords = [];
+                [[top, -1], [bot, 1]].forEach(([m, sd]) => {
+                    for (let i = 0; i < m; i++) {
+                        coords.push({
+                            x: centerX - (shape.w || 120) / 2 + (i + 0.5) * (shape.w || 120) / Math.max(1, m),
+                            y: centerY + sd * ((shape.h || 60) / 2 + 14)
+                        });
+                    }
+                });
+                return coords;
+            })()
+            : Array.from({ length: shape.count || 0 }, (_, i) => {
+                const a = i / Math.max(1, shape.count || 1) * Math.PI * 2;
+                return {
+                    x: centerX + Math.cos(a) * ((shape.r || 36) + 14),
+                    y: centerY + Math.sin(a) * ((shape.r || 36) + 14)
+                };
+            });
+
+        const tableLabel = (shape.label || '').trim() || ('T' + shape.id);
+        seatPositions.forEach((seat, idx) => {
+            const label = String(idx + 1);
+            canvas.add(this.makeDesignerSeat({
+                x: seat.x, y: seat.y, label, seatId: (ids && ids[idx]) || (tableLabel + '-' + label),
+                rowLabel: tableLabel, color: this.getCategoryColor(shape.cat), catId: shape.cat,
+                categoryName: this.getCategoryName(shape.cat)
+            }));
+        });
+
+        if (shape.label) {
+            const label = new fabric.Text(shape.label, {
+                left: centerX,
+                top: centerY + 4,
+                fontSize: 12,
+                fontWeight: 700,
+                fill: '#1e2540',
+                originX: 'center',
+                originY: 'center',
+                selectable: false,
+                evented: false
+            });
+            canvas.add(label);
+        }
+    },
+    recreateDesignerRect(canvas, shape) {
+        const x = shape.x || 0;
+        const y = shape.y || 0;
+        const w = shape.w || 100;
+        const h = shape.h || 100;
+        const rect = new fabric.Rect({
+            left: x,
+            top: y,
+            width: w,
+            height: h,
+            fill: '#dfe3f3',
+            stroke: '#64708f',
+            strokeWidth: 1,
+            originX: 'left',
+            originY: 'top',
+            selectable: false,
+            evented: false,
+            opacity: 0.35,
+            rx: 10,
+            ry: 10
+        });
+        canvas.add(rect);
+        if (shape.label) {
+            const label = new fabric.Text(shape.label, {
+                left: x + w / 2,
+                top: y + h / 2,
+                fontSize: 14,
+                fontWeight: 600,
+                fill: '#1e2540',
+                originX: 'center',
+                originY: 'center',
+                selectable: false,
+                evented: false
+            });
+            canvas.add(label);
+        }
+    },
+    recreateDesignerGeneral(canvas, shape) {
+        const gaColor = this.getCategoryColor(shape.cat);
+        const rect = new fabric.Rect({
+            left: shape.x || 0,
+            top: shape.y || 0,
+            width: shape.w || 100,
+            height: shape.h || 60,
+            fill: gaColor,
+            stroke: '#64708f',
+            strokeWidth: 1,
+            originX: 'left',
+            originY: 'top',
+            selectable: false,
+            evented: false,
+            opacity: 0.35,
+            rx: 10,
+            ry: 10,
+            objectType: 'genrectangle',
+            createdBy: 'designer',
+            rectangleId: 'ga-' + shape.id,
+            rectangleLabel: shape.label || '',
+            generalLabel: shape.label || null,
+            capacity: shape.cap || 0,
+            categoryId: gaColor,
+            categoryName: this.getCategoryName(shape.cat)
+        });
+        canvas.add(rect);
+
+        if (shape.label) {
+            const label = new fabric.Text(shape.label, {
+                left: (shape.x || 0) + (shape.w || 0) / 2,
+                top: (shape.y || 0) + (shape.h || 0) / 2,
+                fontSize: 14,
+                fontWeight: 700,
+                fill: '#1e2540',
+                originX: 'center',
+                originY: 'center',
+                selectable: false,
+                evented: false
+            });
+            canvas.add(label);
+        }
+    },
+    recreateDesignerIcon(canvas, shape) {
+        const iconSvg = `
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                <path d="M12 3a9 9 0 100 18 9 9 0 000-18zm0 5.5v4.2m0 4.1v.1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <circle cx="12" cy="12" r="1.5" fill="currentColor"/>
+            </svg>`;
+
+        const img = new Image();
+        const svg = new Blob([iconSvg], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(svg);
+        img.onload = () => {
+            const iconImg = new fabric.Image(img, {
+                left: shape.x || 0,
+                top: shape.y || 0,
+                scaleX: (shape.size || 32) / img.width,
+                scaleY: (shape.size || 32) / img.height,
+                selectable: false,
+                evented: false,
+                originX: 'left',
+                originY: 'top'
+            });
+            canvas.add(iconImg);
+            URL.revokeObjectURL(url);
+        };
+        img.src = url;
+    },
+    recreateDesignerLine(canvas, shape) {
+        const line = new fabric.Line([shape.x1, shape.y1, shape.x2, shape.y2], {
+            stroke: shape.color || '#64708f',
+            strokeWidth: shape.w || 3,
+            selectable: false,
+            evented: false,
+            strokeDashArray: shape.dash ? shape.dash.split(' ').map(v => Number(v)).filter(v => !isNaN(v)) : []
+        });
+        canvas.add(line);
+    },
+    recreateDesignerText(canvas, shape) {
+        const text = new fabric.Text(shape.text || '', {
+            left: shape.x || 0,
+            top: shape.y || 0,
+            fontSize: shape.size || 16,
+            fontWeight: 600,
+            fill: '#1e2540',
+            originX: 'center',
+            originY: 'center',
+            selectable: false,
+            evented: false
+        });
+        canvas.add(text);
+    },
+    getCategoryColor(categoryId) {
+        const saved = (this._designerCats || []).find(c => String(c.id) === String(categoryId));
+        if (saved && saved.color) return saved.color;
+        const colors = {
+            1: '#ff5d6c',
+            2: '#4f46e5',
+            3: '#22d3ee',
+            4: '#f59e0b',
+            5: '#10b981'
+        };
+        return colors[categoryId] || '#4f46e5';
+    },
+    getCategoryName(categoryId) {
+        const saved = (this._designerCats || []).find(c => String(c.id) === String(categoryId));
+        return saved ? (saved.name || '') : '';
+    },
+    // Seat ids for rows/tables saved by chart-editor.js. getData() stores them in chart_json.objects
+    // (rows then tables, in shape order) so ids always equal the seat_name rows written by hq_seat_sync.
+    buildDesignerSeatIds(shapes, objects) {
+        const map = new Map();
+        const saved = (objects || []).filter(o => o && o.seatId && !o.type);
+        const seatShapes = (shapes || []).filter(sh => sh && (sh.type === 'row' || sh.type === 'table') && sh.count > 0);
+        const total = seatShapes.reduce((n, sh) => n + sh.count, 0);
+        if (!saved.length || saved.length !== total) return map;
+        let k = 0;
+        for (const sh of seatShapes) {
+            const expectedRow = ((sh.label || '').trim() || ((sh.type === 'row' ? 'R' : 'T') + sh.id)).slice(0, 100);
+            if (saved[k].rowName !== expectedRow) return new Map();   // chart edited by another tool - fall back to computed ids
+            const ids = [];
+            for (let i = 0; i < sh.count; i++) ids.push(saved[k++].seatId);
+            map.set(sh.id, ids);
+        }
+        return map;
+    },
+    // One selectable seat, with the properties enableUserMode / applyStatusColors / the ticket popup read.
+    makeDesignerSeat(o) {
+        const circle = new fabric.Circle({
+            radius: 8, left: o.x, top: o.y, fill: o.color, stroke: '#ffffff', strokeWidth: 1.5,
+            originX: 'center', originY: 'center', selectable: false, evented: false
+        });
+        const text = new fabric.Text(String(o.label), {
+            left: o.x, top: o.y, fontSize: 8, fontWeight: 'bold', fill: '#ffffff',
+            originX: 'center', originY: 'center', selectable: false, evented: false
+        });
+        const g = new fabric.Group([circle, text], {
+            left: o.x, top: o.y, originX: 'center', originY: 'center', selectable: false, evented: false,
+            hasControls: false, hasBorders: false, subTargetCheck: true, objectCaching: false
+        });
+        g.seatId = o.seatId;
+        g.seatLabel = String(o.label);
+        g.rowLabel = o.rowLabel || '';
+        g.rowId = o.rowLabel || 'row';
+        g.categoryId = o.color;                 // same meaning as on seats saved by the old designer: the colour
+        g.catId = o.catId || '';
+        g.categoryName = o.categoryName || '';
+        g.seatType = '';
+        g.seatStatus = 'available';
+        g.seatProps = o.props || {};
+        g.circle = circle;
+        g.textObj = text;
+        g.set('seatId', g.seatId);
+        g.set('rowLabel', g.rowLabel);
+        g.set('seatStatus', 'available');
+        g.set('categoryId', g.categoryId);
+        g.set('categoryName', g.categoryName);
+        return g;
     },
     //recreateSeatFromData(canvas, objData) {
     //    const radius = 8;
@@ -3138,10 +3566,17 @@ window.fabricInterop = {
         seatGroup.customLabelStart = objData.customLabelStart || '';
         seatGroup.rowLabelFormat = objData.rowLabelFormat || '';
         seatGroup.rowLabelCustomStart = objData.rowLabelCustomStart || '';
+
+        seatGroup.curveType = objData.curveType || '';
+        seatGroup.curveIntensity = objData.curveIntensity != null ? objData.curveIntensity : 0;
+        seatGroup.curveRadius = objData.curveRadius != null ? objData.curveRadius : 0;
         seatGroup.set('seatLabelFormat', seatGroup.seatLabelFormat);
         seatGroup.set('customLabelStart', seatGroup.customLabelStart);
         seatGroup.set('rowLabelFormat', seatGroup.rowLabelFormat);
         seatGroup.set('rowLabelCustomStart', seatGroup.rowLabelCustomStart);
+        seatGroup.set('curveType', seatGroup.curveType);
+        seatGroup.set('curveIntensity', seatGroup.curveIntensity);
+        seatGroup.set('curveRadius', seatGroup.curveRadius);
         seatGroup.setCoords();
 
         canvas.add(seatGroup);
@@ -3299,6 +3734,7 @@ window.fabricInterop = {
             evented: false,
             text: objData.generalLabel || '',
             rectangleId: objData.rectangleId,
+            rectangleLabel: objData.rectangleLabel || '',
             isRectangleLabel: true,
             textAlign: 'center',
             id: objData.id || `label-${objData.rectangleId}`
@@ -4295,14 +4731,14 @@ window.fabricInterop = {
         return true;
     },
 
-    handleGenRectangleSelection(canvasId, rectangle, mouseEvent,chartId) {
+    handleGenRectangleSelection(canvasId, rectangle, mouseEvent, chartId) {
         const canvas = this.canvases[canvasId];
         const rectangleId = rectangle.rectangleId || rectangle.get("rectangleId");
         const category = rectangle.categoryName || rectangle.get("categoryName") || "General";
         const label = rectangle.generalLabel || rectangle.get("generalLabel") || "General Area";
         const capacity = rectangle.capacity || rectangle.get("capacity") || 0;
         const color = rectangle.categoryId || rectangle.fill || "#f0f0f0";
-        this.showGASelectionPopup(canvasId, rectangle, mouseEvent,chartId);
+        this.showGASelectionPopup(canvasId, rectangle, mouseEvent, chartId);
     },
 
 
@@ -4808,7 +5244,7 @@ window.fabricInterop = {
     //    this._resizeHandler = handleResize;
     //},
 
-    async showGASelectionPopup(canvasId, rectangle, mouseEvent,chartId) {
+    async showGASelectionPopup(canvasId, rectangle, mouseEvent, chartId) {
         const canvas = this.canvases[canvasId];
         const rectangleId = rectangle.rectangleId || rectangle.get("rectangleId");
         const category = rectangle.categoryName || rectangle.get("categoryName") || "General";
@@ -6173,7 +6609,104 @@ window.fabricInterop = {
         return { x: base.x + perpX * rowIndex * this.rowGap, y: base.y + perpY * rowIndex * this.rowGap };
     },
 
+    //showRowCustomizeOptions(canvasId) {
+    //    debugger;
+    //    const canvas = this.canvases[canvasId];
+    //    const activeObject = canvas.getActiveObject();
+    //    if (!activeObject) {
+    //        showNotification("Please select rows first", "info");
+    //        return;
+    //    }
+    //    const selectedRows = this.getSelectedRows(activeObject, canvas);
+    //    if (selectedRows.length === 0) {
+    //        showNotification("No rows selected. Please select seats that belong to rows.", "info");
+    //        return;
+    //    }
+    //    // Restore last-used values (default to "up" / 50 on first use)
+    //    const lastCurveType = this._lastCurveType || "up";
+    //    const lastIntensity = this._lastIntensity != null ? this._lastIntensity : 50;
+    //    let panel = document.getElementById("rowCustomizePanel");
+    //    if (!panel) {
+    //        panel = document.createElement("div");
+    //        panel.id = "rowCustomizePanel";
+    //        panel.style.cssText = `position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); z-index: 10000; min-width: 320px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;`;
+    //        //panel.innerHTML = `<div style="margin-bottom: 15px;"><label style="display: block; margin-bottom: 5px; font-weight: 500;">Curve Type:</label><select id="curveTypeSelect" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;"><option value="up">Curve Up (U Shape) ⌣</option><option value="down">Curve Down (∩ Shape) ⌢</option><option value="wave">Wave Pattern ~</option><option value="none">None (Straighten)</option></select></div><div style="margin-bottom: 20px;"><label style="display: block; margin-bottom: 5px; font-weight: 500;">Curve Intensity: <span id="intensityValue" style="color: #4CAF50; font-weight: bold;">50</span></label><input type="range" id="curveIntensity" min="0" max="100" value="${lastIntensity}" style="width: 100%;"><div style="display: flex; justify-content: space-between; margin-top: 5px;"><span style="font-size: 12px; color: #666;">Gentle</span><span style="font-size: 12px; color: #666;">Extreme</span></div></div><div style="margin-bottom: 15px;"><label style="display: block; margin-bottom: 5px; font-weight: 500;">Preview:</label><div style="background: #f5f5f5; border-radius: 4px; padding: 10px; text-align: center;"><canvas id="curvePreviewCanvas" width="280" height="60" style="border: 1px solid #ddd; background: white;"></canvas></div></div><div style="display: flex; gap: 10px; justify-content: flex-end;"><button id="applyCurveBtn" style="padding: 8px 20px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">Apply Curve</button><button id="cancelCurveBtn" style="padding: 8px 20px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">Cancel</button></div>`;
+
+    //        const optionsHtml = `
+    //        <option value="up"   ${lastCurveType === "up" ? "selected" : ""}>Curve Up (U Shape) ⌣</option>
+    //        <option value="down" ${lastCurveType === "down" ? "selected" : ""}>Curve Down (∩ Shape) ⌢</option>
+    //        <option value="wave" ${lastCurveType === "wave" ? "selected" : ""}>Wave Pattern ~</option>
+    //        <option value="none" ${lastCurveType === "none" ? "selected" : ""}>None (Straighten)</option>
+    //    `;
+
+    //        panel.innerHTML = `
+    //        <div style="margin-bottom: 15px;">
+    //            <label style="display: block; margin-bottom: 5px; font-weight: 500;">Curve Type:</label>
+    //            <select id="curveTypeSelect" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+    //                ${optionsHtml}
+    //            </select>
+    //        </div>
+    //        <div style="margin-bottom: 20px;">
+    //            <label style="display: block; margin-bottom: 5px; font-weight: 500;">
+    //                Curve Intensity: <span id="intensityValue" style="color: #4CAF50; font-weight: bold;">${lastIntensity}</span>
+    //            </label>
+    //            <input type="range" id="curveIntensity" min="0" max="100" value="${lastIntensity}" style="width: 100%;">
+    //            <div style="display: flex; justify-content: space-between; margin-top: 5px;">
+    //                <span style="font-size: 12px; color: #666;">Gentle</span>
+    //                <span style="font-size: 12px; color: #666;">Extreme</span>
+    //            </div>
+    //        </div>
+    //        <div style="margin-bottom: 15px;">
+    //            <label style="display: block; margin-bottom: 5px; font-weight: 500;">Preview:</label>
+    //            <div style="background: #f5f5f5; border-radius: 4px; padding: 10px; text-align: center;">
+    //                <canvas id="curvePreviewCanvas" width="280" height="60" style="border: 1px solid #ddd; background: white;"></canvas>
+    //            </div>
+    //        </div>
+    //        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+    //            <button id="applyCurveBtn" style="padding: 8px 20px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">Apply Curve</button>
+    //            <button id="cancelCurveBtn" style="padding: 8px 20px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">Cancel</button>
+    //        </div>
+    //    `;
+    //        document.body.appendChild(panel);
+    //        const previewCanvas = document.getElementById("curvePreviewCanvas");
+    //        this.drawCurvePreview(previewCanvas, lastCurveType , lastIntensity);
+    //        const intensitySlider = document.getElementById("curveIntensity");
+    //        const intensityValue = document.getElementById("intensityValue");
+    //        const curveTypeSelect = document.getElementById("curveTypeSelect");
+    //        intensitySlider.addEventListener("input", (e) => {
+    //            const value = e.target.value;
+    //            intensityValue.textContent = value;
+    //            const curveType = curveTypeSelect.value;
+    //            this._lastIntensity = parseInt(value);
+    //            this._lastCurveType = curveTypeSelect.value;
+    //            if (curveType !== "none") this.drawCurvePreview(previewCanvas, curveType, parseInt(value));
+    //        });
+    //        curveTypeSelect.addEventListener("change", (e) => {
+    //            const curveType = e.target.value;
+    //            const intensity = parseInt(intensitySlider.value);
+    //            this._lastCurveType = curveType;
+    //            this._lastIntensity = intensity;
+    //            if (curveType !== "none") this.drawCurvePreview(previewCanvas, curveType, intensity);
+    //            else this.drawStraightPreview(previewCanvas);
+    //        });
+    //        document.getElementById("applyCurveBtn").addEventListener("click", () => {
+    //            const curveType = document.getElementById("curveTypeSelect").value;
+    //            const intensity = parseInt(intensitySlider.value);
+    //            // Save final values
+    //            this._lastCurveType = curveType;
+    //            this._lastIntensity = intensity;
+    //            const radius = (intensity / 100) * 80;
+    //            if (curveType === "none") this.straightenSelectedRows(canvasId);
+    //            else this.curveSelectedRows(canvasId, radius, curveType, intensity);
+    //            panel.remove();
+    //        });
+    //        document.getElementById("cancelCurveBtn").addEventListener("click", () => panel.remove());
+    //    }
+    //    panel.style.display = "block";
+    //},
     showRowCustomizeOptions(canvasId) {
+        this._lastCurveType = null;
+        this._lastIntensity = null;
         const canvas = this.canvases[canvasId];
         const activeObject = canvas.getActiveObject();
         if (!activeObject) {
@@ -6185,43 +6718,124 @@ window.fabricInterop = {
             showNotification("No rows selected. Please select seats that belong to rows.", "info");
             return;
         }
-        let panel = document.getElementById("rowCustomizePanel");
-        if (!panel) {
-            panel = document.createElement("div");
-            panel.id = "rowCustomizePanel";
-            panel.style.cssText = `position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); z-index: 10000; min-width: 320px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;`;
-            panel.innerHTML = `<div style="margin-bottom: 15px;"><label style="display: block; margin-bottom: 5px; font-weight: 500;">Curve Type:</label><select id="curveTypeSelect" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;"><option value="up">Curve Up (U Shape) ⌣</option><option value="down">Curve Down (∩ Shape) ⌢</option><option value="wave">Wave Pattern ~</option><option value="none">None (Straighten)</option></select></div><div style="margin-bottom: 20px;"><label style="display: block; margin-bottom: 5px; font-weight: 500;">Curve Intensity: <span id="intensityValue" style="color: #4CAF50; font-weight: bold;">50</span></label><input type="range" id="curveIntensity" min="0" max="100" value="50" style="width: 100%;"><div style="display: flex; justify-content: space-between; margin-top: 5px;"><span style="font-size: 12px; color: #666;">Gentle</span><span style="font-size: 12px; color: #666;">Extreme</span></div></div><div style="margin-bottom: 15px;"><label style="display: block; margin-bottom: 5px; font-weight: 500;">Preview:</label><div style="background: #f5f5f5; border-radius: 4px; padding: 10px; text-align: center;"><canvas id="curvePreviewCanvas" width="280" height="60" style="border: 1px solid #ddd; background: white;"></canvas></div></div><div style="display: flex; gap: 10px; justify-content: flex-end;"><button id="applyCurveBtn" style="padding: 8px 20px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">Apply Curve</button><button id="cancelCurveBtn" style="padding: 8px 20px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">Cancel</button></div>`;
-            document.body.appendChild(panel);
-            const previewCanvas = document.getElementById("curvePreviewCanvas");
-            this.drawCurvePreview(previewCanvas, "up", 50);
-            const intensitySlider = document.getElementById("curveIntensity");
-            const intensityValue = document.getElementById("intensityValue");
-            const curveTypeSelect = document.getElementById("curveTypeSelect");
-            intensitySlider.addEventListener("input", (e) => {
-                const value = e.target.value;
-                intensityValue.textContent = value;
-                const curveType = curveTypeSelect.value;
-                if (curveType !== "none") this.drawCurvePreview(previewCanvas, curveType, parseInt(value));
-            });
-            curveTypeSelect.addEventListener("change", (e) => {
-                const curveType = e.target.value;
-                const intensity = parseInt(intensitySlider.value);
-                if (curveType !== "none") this.drawCurvePreview(previewCanvas, curveType, intensity);
-                else this.drawStraightPreview(previewCanvas);
-            });
-            document.getElementById("applyCurveBtn").addEventListener("click", () => {
-                const curveType = document.getElementById("curveTypeSelect").value;
-                const intensity = parseInt(intensitySlider.value);
-                const radius = (intensity / 100) * 80;
-                if (curveType === "none") this.straightenSelectedRows(canvasId);
-                else this.curveSelectedRows(canvasId, radius, curveType);
-                panel.remove();
-            });
-            document.getElementById("cancelCurveBtn").addEventListener("click", () => panel.remove());
-        }
-        panel.style.display = "block";
-    },
 
+        // --- Determine default values from the selection ---
+        let defaultCurveType = "none";
+        let defaultIntensity = 0;
+        //const flatSeats = selectedRows.flat();
+        const flatSeats = selectedRows.flatMap(row => row.seats);
+        const seatWithCurve = flatSeats.find(s => s.curveType && s.curveType !== 'none');
+        debugger;
+        if (seatWithCurve) {
+            defaultCurveType = seatWithCurve.curveType;
+            defaultIntensity = seatWithCurve.curveIntensity != null
+                ? seatWithCurve.curveIntensity
+                : 50;
+        } else if (this._lastCurveType) {
+            defaultCurveType = this._lastCurveType;
+            defaultIntensity = this._lastIntensity != null ? this._lastIntensity : 50;
+        }
+
+        // ✅ Always rebuild the panel — avoids stale-DOM issues entirely
+        let panel = document.getElementById("rowCustomizePanel");
+        if (panel) panel.remove();
+
+        panel = document.createElement("div");
+        panel.id = "rowCustomizePanel";
+        panel.style.cssText = `position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); z-index: 10000; min-width: 320px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;`;
+
+        const optionsHtml = `
+        <option value="none" ${defaultCurveType === "none" ? "selected" : ""}>None (Straighten)</option>
+        <option value="up"   ${defaultCurveType === "up" ? "selected" : ""}>Curve Up (∩ Shape) ⌢</option>
+        <option value="down" ${defaultCurveType === "down" ? "selected" : ""}>Curve Down (U Shape)  ⌣</option>
+        <option value="wave" ${defaultCurveType === "wave" ? "selected" : ""}>Wave Pattern ~</option>
+    `;
+
+        panel.innerHTML = `
+        <div style="margin-bottom: 15px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: 500;">Curve Type:</label>
+            <select id="curveTypeSelect" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+                ${optionsHtml}
+            </select>
+        </div>
+        <div style="margin-bottom: 20px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: 500;">
+                Curve Intensity: <span id="intensityValue" style="color: #4CAF50; font-weight: bold;">${defaultIntensity}</span>
+            </label>
+            <input type="range" id="curveIntensity" min="0" max="100" value="${defaultIntensity}" style="width: 100%;">
+            <div style="display: flex; justify-content: space-between; margin-top: 5px;">
+                <span style="font-size: 12px; color: #666;">Gentle</span>
+                <span style="font-size: 12px; color: #666;">Extreme</span>
+            </div>
+        </div>
+        <div style="margin-bottom: 15px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: 500;">Preview:</label>
+            <div style="background: #f5f5f5; border-radius: 4px; padding: 10px; text-align: center;">
+                <canvas id="curvePreviewCanvas" width="280" height="60" style="border: 1px solid #ddd; background: white;"></canvas>
+            </div>
+        </div>
+        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+            <button id="applyCurveBtn" style="padding: 8px 20px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">Apply Curve</button>
+            <button id="cancelCurveBtn" style="padding: 8px 20px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">Cancel</button>
+        </div>
+    `;
+
+        document.body.appendChild(panel);
+
+        // ✅ Query INSIDE the panel, and after appendChild
+        const previewCanvas = panel.querySelector("#curvePreviewCanvas");
+        const intensitySlider = panel.querySelector("#curveIntensity");
+        const intensityValue = panel.querySelector("#intensityValue");
+        const curveTypeSelect = panel.querySelector("#curveTypeSelect");
+
+        // Guard: if the canvas somehow isn't there, bail without crashing
+        if (!previewCanvas || !intensitySlider || !intensityValue || !curveTypeSelect) {
+            console.error("Row customize panel: required elements missing");
+            panel.remove();
+            return;
+        }
+
+        // Initial preview using restored values
+        if (defaultCurveType === "none") this.drawStraightPreview(previewCanvas);
+        else this.drawCurvePreview(previewCanvas, defaultCurveType, defaultIntensity);
+
+        intensitySlider.addEventListener("input", (e) => {
+            const value = parseInt(e.target.value);
+            intensityValue.textContent = value;
+            this._lastIntensity = value;
+            this._lastCurveType = curveTypeSelect.value;
+            if (curveTypeSelect.value !== "none")
+                this.drawCurvePreview(previewCanvas, curveTypeSelect.value, value);
+            else
+                this.drawStraightPreview(previewCanvas);
+        });
+
+        curveTypeSelect.addEventListener("change", (e) => {
+            const curveType = e.target.value;
+            const intensity = parseInt(intensitySlider.value);
+            this._lastCurveType = curveType;
+            this._lastIntensity = intensity;
+            if (curveType !== "none") this.drawCurvePreview(previewCanvas, curveType, intensity);
+            else this.drawStraightPreview(previewCanvas);
+        });
+
+        panel.querySelector("#applyCurveBtn").addEventListener("click", () => {
+            const curveType = panel.querySelector("#curveTypeSelect").value;
+            const intensity = parseInt(intensitySlider.value);
+            this._lastCurveType = curveType;
+            this._lastIntensity = intensity;
+            const radius = (intensity / 100) * 80;
+            if (curveType === "none") this.straightenSelectedRows(canvasId);
+            else this.curveSelectedRows(canvasId, radius, curveType, intensity);
+            panel.remove();
+        });
+
+        panel.querySelector("#cancelCurveBtn").addEventListener("click", () => {
+            this._lastCurveType = panel.querySelector("#curveTypeSelect").value;
+            this._lastIntensity = parseInt(intensitySlider.value);
+            panel.remove();
+        });
+    },
     drawCurvePreview(canvas, curveType, intensity) {
         const ctx = canvas.getContext('2d');
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -6308,7 +6922,7 @@ window.fabricInterop = {
         return rows;
     },
 
-    curveSelectedRows(canvasId, radius, curveDirection) {
+    curveSelectedRows(canvasId, radius, curveDirection, intensity) {
         const canvas = this.canvases[canvasId];
         const activeObject = canvas.getActiveObject();
         if (!activeObject) return;
@@ -6318,55 +6932,399 @@ window.fabricInterop = {
             return;
         }
         saveState(canvas);
-        selectedRows.forEach(rowData => this.curveRow(canvas, rowData.seats, radius, curveDirection));
+        selectedRows.forEach(rowData => this.curveRow(canvas, rowData.seats, radius, curveDirection, intensity));
         canvas.renderAll();
         saveState(canvas);
         showNotification(`${selectedRows.length} row(s) curved successfully`, "success");
     },
 
-    curveRow(canvas, seats, radius, direction) {
+    //curveRow(canvas, seats, radius, direction) {
+    //    if (seats.length < 2) return;
+    //    const originalPositions = seats.map(seat => ({ seat: seat, x: seat.left, y: seat.top, originalX: seat.left, originalY: seat.top }));
+    //    const minX = Math.min(...originalPositions.map(p => p.x));
+    //    const maxX = Math.max(...originalPositions.map(p => p.x));
+    //    const centerX = (minX + maxX) / 2;
+    //    const avgY = originalPositions.reduce((sum, p) => sum + p.y, 0) / seats.length;
+    //    const rowWidth = maxX - minX;
+    //    const halfWidth = rowWidth / 2;
+    //    originalPositions.forEach(position => {
+    //        const seat = position.seat;
+    //        const relativeX = position.x - centerX;
+    //        const normalizedX = relativeX / halfWidth;
+    //        let yOffset = 0;
+    //        switch (direction) {
+    //            case "up": yOffset = -radius * (1 - Math.pow(normalizedX, 2)); break;
+    //            case "down": yOffset = radius * (1 - Math.pow(normalizedX, 2)); break;
+    //            case "wave": yOffset = radius * Math.sin(normalizedX * Math.PI); break;
+    //            default: yOffset = -radius * (1 - Math.pow(normalizedX, 2));
+    //        }
+    //        const newY = avgY + yOffset;
+    //        seat.set({ left: position.x, top: newY });
+    //        if (!seat.originalPosition) seat.originalPosition = { x: position.originalX, y: position.originalY };
+    //    });
+    //},
+    //curveRow(canvas, seats, radius, direction, intensity) {
+    //    if (seats.length < 2) return;
+
+    //    const originalPositions = seats.map(seat => ({
+    //        seat: seat,
+    //        x: seat.left,
+    //        y: seat.top,
+    //        originalX: seat.left,
+    //        originalY: seat.top
+    //    }));
+
+    //    const minX = Math.min(...originalPositions.map(p => p.x));
+    //    const maxX = Math.max(...originalPositions.map(p => p.x));
+    //    const centerX = (minX + maxX) / 2;
+    //    const avgY = originalPositions.reduce((sum, p) => sum + p.y, 0) / seats.length;
+    //    const rowWidth = maxX - minX;
+    //    const halfWidth = rowWidth / 2;
+
+    //    originalPositions.forEach(position => {
+    //        const seat = position.seat;
+    //        const relativeX = position.x - centerX;
+    //        const normalizedX = relativeX / halfWidth;
+    //        let yOffset = 0;
+
+    //        switch (direction) {
+    //            case "up": yOffset = -radius * (1 - Math.pow(normalizedX, 2)); break;
+    //            case "down": yOffset = radius * (1 - Math.pow(normalizedX, 2)); break;
+    //            case "wave": yOffset = radius * Math.sin(normalizedX * Math.PI); break;
+    //            default: yOffset = -radius * (1 - Math.pow(normalizedX, 2));
+    //        }
+
+    //        const newY = avgY + yOffset;
+    //        seat.set({ left: position.x, top: newY });
+
+    //        if (!seat.originalPosition) {
+    //            seat.originalPosition = { x: position.originalX, y: position.originalY };
+    //        }
+
+    //        // ============================================================
+    //        // ✅ STORE CURVE INFO ON THE SEAT (for save / reload)
+    //        // ============================================================
+    //        seat.set('curveType', direction);
+    //        seat.set('curveIntensity', intensity);
+    //        seat.set('curveRadius', radius);
+
+    //        // also plain JS props (matches how you store rowLabelFormat etc.)
+    //        seat.curveType = direction;
+    //        seat.curveIntensity = intensity;
+    //        seat.curveRadius = radius;
+    //    });
+    //},
+
+
+
+    //curveRow(canvas, seats, radius, direction, intensity) {
+    //    if (seats.length < 2) return;
+
+    //    const originalPositions = seats.map(seat => ({
+    //        seat: seat,
+    //        x: seat.left,
+    //        y: seat.top,
+    //        originalX: seat.left,
+    //        originalY: seat.top
+    //    }));
+
+    //    const minX = Math.min(...originalPositions.map(p => p.x));
+    //    const maxX = Math.max(...originalPositions.map(p => p.x));
+    //    const centerX = (minX + maxX) / 2;
+    //    const avgY = originalPositions.reduce((sum, p) => sum + p.y, 0) / seats.length;
+    //    const rowWidth = maxX - minX;
+    //    const halfWidth = rowWidth / 2;
+
+    //    // 1. Collect unique row labels for this row
+    //    const rowLabels = new Set();
+    //    seats.forEach(s => {
+    //        if (s.rowLabelObject) rowLabels.add(s.rowLabelObject);
+    //    });
+
+    //    // 2. Curve the seats
+    //    originalPositions.forEach(position => {
+    //        const seat = position.seat;
+    //        const relativeX = position.x - centerX;
+    //        const normalizedX = relativeX / halfWidth;
+    //        let yOffset = 0;
+
+    //        switch (direction) {
+    //            case "up": yOffset = -radius * (1 - Math.pow(normalizedX, 2)); break;
+    //            case "down": yOffset = radius * (1 - Math.pow(normalizedX, 2)); break;
+    //            case "wave": yOffset = radius * Math.sin(normalizedX * Math.PI); break;
+    //            default: yOffset = -radius * (1 - Math.pow(normalizedX, 2));
+    //        }
+
+    //        const newY = avgY + yOffset;
+    //        seat.set({ left: position.x, top: newY });
+
+    //        if (!seat.originalPosition) {
+    //            seat.originalPosition = { x: position.originalX, y: position.originalY };
+    //        }
+
+    //        // Store curve info on the seat
+    //        seat.set('curveType', direction);
+    //        seat.set('curveIntensity', intensity);
+    //        seat.set('curveRadius', radius);
+    //        seat.curveType = direction;
+    //        seat.curveIntensity = intensity;
+    //        seat.curveRadius = radius;
+    //    });
+
+    //    // 3. Curve the row labels
+    //    rowLabels.forEach(labelObj => {
+    //        if (!labelObj.originalPosition) {
+    //            labelObj.originalPosition = { x: labelObj.left, y: labelObj.top };
+    //        }
+
+    //        // Preserve the label's X position
+    //        const labelX = labelObj.originalPosition.x;
+
+    //        // Compute the curve's Y at this X
+    //        const relativeX = labelX - centerX;
+    //        const normalizedX = relativeX / halfWidth;
+    //        let yOffset = 0;
+
+    //        switch (direction) {
+    //            case "up": yOffset = -radius * (1 - Math.pow(normalizedX, 2)); break;
+    //            case "down": yOffset = radius * (1 - Math.pow(normalizedX, 2)); break;
+    //            case "wave": yOffset = radius * Math.sin(normalizedX * Math.PI); break;
+    //            default: yOffset = -radius * (1 - Math.pow(normalizedX, 2));
+    //        }
+
+    //        const newLabelY = avgY + yOffset;
+    //        labelObj.set({ left: labelX, top: newLabelY });
+    //        labelObj.setCoords();
+    //    });
+    //},
+
+    curveRow(canvas, seats, radius, direction, intensity) {
         if (seats.length < 2) return;
-        const originalPositions = seats.map(seat => ({ seat: seat, x: seat.left, y: seat.top, originalX: seat.left, originalY: seat.top }));
+
+        const originalPositions = seats.map(seat => ({
+            seat: seat,
+            x: seat.left,
+            y: seat.top,
+            originalX: seat.left,
+            originalY: seat.top
+        }));
+
         const minX = Math.min(...originalPositions.map(p => p.x));
         const maxX = Math.max(...originalPositions.map(p => p.x));
         const centerX = (minX + maxX) / 2;
         const avgY = originalPositions.reduce((sum, p) => sum + p.y, 0) / seats.length;
         const rowWidth = maxX - minX;
         const halfWidth = rowWidth / 2;
+
+        // 1. Curve the seats
         originalPositions.forEach(position => {
             const seat = position.seat;
             const relativeX = position.x - centerX;
             const normalizedX = relativeX / halfWidth;
             let yOffset = 0;
+
             switch (direction) {
                 case "up": yOffset = -radius * (1 - Math.pow(normalizedX, 2)); break;
                 case "down": yOffset = radius * (1 - Math.pow(normalizedX, 2)); break;
                 case "wave": yOffset = radius * Math.sin(normalizedX * Math.PI); break;
                 default: yOffset = -radius * (1 - Math.pow(normalizedX, 2));
             }
+
             const newY = avgY + yOffset;
             seat.set({ left: position.x, top: newY });
-            if (!seat.originalPosition) seat.originalPosition = { x: position.originalX, y: position.originalY };
+
+            if (!seat.originalPosition) {
+                seat.originalPosition = { x: position.originalX, y: position.originalY };
+            }
+
+            seat.set('curveType', direction);
+            seat.set('curveIntensity', intensity);
+            seat.set('curveRadius', radius);
+            seat.curveType = direction;
+            seat.curveIntensity = intensity;
+            seat.curveRadius = radius;
+        });
+
+        // 2. Reposition the Row Label dynamically based on Anchor Seat
+        const rowLabels = new Set();
+        seats.forEach(s => { if (s.rowLabelObject) rowLabels.add(s.rowLabelObject); });
+
+        const directionText = document.getElementById("ddldirection")?.value || "LTR";
+        const labelSpacing = 25;
+
+        // Find the new anchor seat (Leftmost for LTR, Rightmost for RTL)
+        seats.sort((a, b) => a.left - b.left);
+        const anchorSeat = directionText === "RTL" ? seats[seats.length - 1] : seats[0];
+
+        rowLabels.forEach(labelObj => {
+            // Place the label next to the curved anchor seat
+            const labelX = directionText === "RTL" ? anchorSeat.left + labelSpacing : anchorSeat.left - labelSpacing;
+            const labelY = anchorSeat.top; // Follow the anchor seat's curved Y position
+
+            labelObj.set({ left: labelX, top: labelY });
+            labelObj.setCoords();
         });
     },
+
+    //straightenSelectedRows(canvasId) {
+    //    const canvas = this.canvases[canvasId];
+    //    const activeObject = canvas.getActiveObject();
+    //    if (!activeObject) return;
+    //    const selectedRows = this.getSelectedRows(activeObject, canvas);
+    //    if (selectedRows.length === 0) return;
+    //    saveState(canvas);
+    //    selectedRows.forEach(rowData => {
+    //        rowData.seats.forEach(seat => {
+    //            if (seat.originalPosition) seat.set({ left: seat.originalPosition.x, top: seat.originalPosition.y });
+    //        });
+    //    });
+    //    canvas.renderAll();
+    //    saveState(canvas);
+    //    showNotification(`${selectedRows.length} row(s) straightened`, "success");
+    //},
+    //straightenSelectedRows(canvasId) {
+    //    const canvas = this.canvases[canvasId];
+    //    const activeObject = canvas.getActiveObject();
+    //    if (!activeObject) return;
+    //    const selectedRows = this.getSelectedRows(activeObject, canvas);
+    //    if (selectedRows.length === 0) {
+    //        showNotification("No valid rows selected", "info");
+    //        return;
+    //    }
+    //    saveState(canvas);
+
+    //    selectedRows.forEach(rowData => {
+    //        rowData.seats.forEach(seat => {
+    //            // Restore original Y if available, otherwise keep same Y
+    //            if (seat.originalPosition) {
+    //                seat.set({ top: seat.originalPosition.y });
+    //            }
+    //            // ============================================================
+    //            // ✅ CLEAR CURVE INFO
+    //            // ============================================================
+    //            seat.set('curveType', 'none');
+    //            seat.set('curveIntensity', 0);
+    //            seat.set('curveRadius', 0);
+
+    //            seat.curveType = 'none';
+    //            seat.curveIntensity = 0;
+    //            seat.curveRadius = 0;
+    //        });
+    //    });
+
+    //    canvas.renderAll();
+    //    saveState(canvas);
+    //    showNotification(`${selectedRows.length} row(s) straightened`, "success");
+    //},
+
+
+
+    //straightenSelectedRows(canvasId) {
+    //    const canvas = this.canvases[canvasId];
+    //    const activeObject = canvas.getActiveObject();
+    //    if (!activeObject) return;
+    //    const selectedRows = this.getSelectedRows(activeObject, canvas);
+    //    if (selectedRows.length === 0) {
+    //        showNotification("No valid rows selected", "info");
+    //        return;
+    //    }
+    //    saveState(canvas);
+
+    //    selectedRows.forEach(rowData => {
+    //        // Collect unique labels for this row
+    //        const rowLabels = new Set();
+
+    //        rowData.seats.forEach(seat => {
+    //            // Restore seat original Y
+    //            if (seat.originalPosition) {
+    //                seat.set({ top: seat.originalPosition.y });
+    //            }
+
+    //            // Clear curve info on seat
+    //            seat.set('curveType', 'none');
+    //            seat.set('curveIntensity', 0);
+    //            seat.set('curveRadius', 0);
+    //            seat.curveType = 'none';
+    //            seat.curveIntensity = 0;
+    //            seat.curveRadius = 0;
+
+    //            if (seat.rowLabelObject) {
+    //                rowLabels.add(seat.rowLabelObject);
+    //            }
+    //        });
+
+    //        // Restore labels to their original positions
+    //        rowLabels.forEach(labelObj => {
+    //            if (labelObj.originalPosition) {
+    //                labelObj.set({
+    //                    left: labelObj.originalPosition.x,
+    //                    top: labelObj.originalPosition.y
+    //                });
+    //                labelObj.setCoords();
+    //            }
+    //        });
+    //    });
+
+    //    canvas.renderAll();
+    //    saveState(canvas);
+    //    showNotification(`${selectedRows.length} row(s) straightened`, "success");
+    //},
 
     straightenSelectedRows(canvasId) {
         const canvas = this.canvases[canvasId];
         const activeObject = canvas.getActiveObject();
         if (!activeObject) return;
         const selectedRows = this.getSelectedRows(activeObject, canvas);
-        if (selectedRows.length === 0) return;
+        if (selectedRows.length === 0) {
+            showNotification("No valid rows selected", "info");
+            return;
+        }
         saveState(canvas);
+
+        const directionText = document.getElementById("ddldirection")?.value || "LTR";
+        const labelSpacing = 25;
+
         selectedRows.forEach(rowData => {
+            const rowLabels = new Set();
+
             rowData.seats.forEach(seat => {
-                if (seat.originalPosition) seat.set({ left: seat.originalPosition.x, top: seat.originalPosition.y });
+                // Restore seat Y
+                if (seat.originalPosition) {
+                    seat.set({ top: seat.originalPosition.y });
+                }
+
+                // Clear curve info
+                seat.set('curveType', 'none');
+                seat.set('curveIntensity', 0);
+                seat.set('curveRadius', 0);
+                seat.curveType = 'none';
+                seat.curveIntensity = 0;
+                seat.curveRadius = 0;
+
+                if (seat.rowLabelObject) rowLabels.add(seat.rowLabelObject);
+            });
+
+            // Sort to find the straight anchor seat
+            rowData.seats.sort((a, b) => a.left - b.left);
+            const anchorSeat = directionText === "RTL" ? rowData.seats[rowData.seats.length - 1] : rowData.seats[0];
+
+            // Snap labels back to straight positions
+            rowLabels.forEach(labelObj => {
+                const labelX = directionText === "RTL" ? anchorSeat.left + labelSpacing : anchorSeat.left - labelSpacing;
+                const labelY = anchorSeat.top;
+
+                labelObj.set({ left: labelX, top: labelY });
+                labelObj.setCoords();
+
+                // Reset originalPosition to match the new straight layout
+                labelObj.originalPosition = { x: labelX, y: labelY };
             });
         });
+
         canvas.renderAll();
         saveState(canvas);
         showNotification(`${selectedRows.length} row(s) straightened`, "success");
     },
-
     updateCurvedRowPreview(canvas, start, pointer, curveRadius = 30) {
         const seats = this.previewSeats;
         if (seats.length < 3) return;
@@ -7200,7 +8158,27 @@ window.fabricInterop = {
 
         // Note: You may also want to show/hide custom seat div
     },
+    populateRectangleProperties: function (canvasId) {
+        debugger;
+        const canvas = this.canvases[canvasId];
+        if (!canvas) return;
+        const active = canvas.getActiveObject();
 
+        // Only proceed if a rectangle is selected
+        if (active && active.type === "activeSelection") {
+            const ddlRect = document.getElementById("ddlrect");
+
+            if (ddlRect) {
+                // If the rectangle has a saved label, set it in the dropdown
+                /* if (active.rectangleLabel) {*/
+                ddlRect.value = active._objects[0].rectangleLabel;
+                //} else {
+                //    // If it has no label, reset the dropdown
+                //    ddlRect.value = "";
+                //}
+            }
+        }
+    },
     clearRowPropertiesUI: function () {
         const txtRowLbl = document.getElementById("txtrowlbl");
         if (txtRowLbl) txtRowLbl.value = '';
@@ -7819,6 +8797,27 @@ window.fabricInterop = {
         };
 
         requestAnimationFrame(animate);
+    },
+
+    resetChartState: function (canvasId) {
+        const canvas = this.canvases[canvasId];
+        if (canvas) {
+            canvas.clear();
+            canvas.renderAll();
+        }
+
+        // Reset global arrays
+        undoStack = [];
+        redoStack = [];
+
+        // Reset counters
+        this.seatCounter = 1;
+
+        // Push the blank state as the baseline
+        if (canvas) {
+            const json = canvas.toJSON();
+            undoStack.push(JSON.stringify(json));
+        }
     }
 
 
@@ -7884,14 +8883,60 @@ function applyLabelVisibility(canvas, showRow, showSeat) {
 }
 
 
-async function loadUserChart(json, seatjson, chartId) {
-    debugger;
-    const layoutJson = json;
-    if (!json) return;
-    fabricInterop.initCanvas("userCanvas");
-    fabricInterop.loadLayout("userCanvas", layoutJson);
-    fabricInterop.enablePreviewMode("userCanvas", seatjson, chartId);
-}
+window.loadUserChart = function (chartJson, seatsJson, chartId) {
+    if (!chartJson) return;
+
+    try {
+        var layout = JSON.parse(chartJson);
+        var seatsData = typeof seatsJson === "string" ? JSON.parse(seatsJson) : seatsJson;
+
+        var seatRows = [];
+        if (Array.isArray(seatsData)) {
+            seatRows = seatsData;
+        } else if (seatsData && seatsData.Tables && seatsData.Tables[0]) {
+            seatRows = seatsData.Tables[0].Rows || seatsData.Tables[0];
+        }
+
+        const canvasId = "userCanvas";
+        const canvasEl = document.getElementById(canvasId);
+        if (!canvasEl) {
+            console.error("loadUserChart: canvas id 'userCanvas' not found in DOM.");
+            return;
+        }
+
+        const chartHost = document.getElementById("chart-container");
+        const width = chartHost ? (chartHost.clientWidth || 1200) : 1200;
+        const height = chartHost ? (chartHost.clientHeight || 800) : 800;
+
+        if (!window.fabricInterop || !window.fabricInterop.initCanvas || !window.fabricInterop.loadLayout) return;
+
+        if (!window.fabricInterop.canvases || !window.fabricInterop.canvases[canvasId]) {
+            window.fabricInterop.initCanvas(canvasId, width, height);
+        } else {
+            const existingCanvas = window.fabricInterop.canvases[canvasId];
+            existingCanvas.clear();
+            existingCanvas.setWidth(width);
+            existingCanvas.setHeight(height);
+        }
+
+        window.fabricInterop.loadLayout(canvasId, chartJson);
+
+        const hasObjects = layout && ((Array.isArray(layout.objects) && layout.objects.length) || (Array.isArray(layout.shapes) && layout.shapes.length));
+        if (hasObjects && seatRows && seatRows.length > 0) {
+            window.fabricInterop.enablePreviewMode(canvasId, seatRows, chartId);
+        } else {
+            window.fabricInterop.enablePreviewMode(canvasId, [], chartId);
+        }
+
+        const canvas = window.fabricInterop.canvases[canvasId];
+        if (canvas) {
+            canvas.renderAll();
+            window.fabricInterop.fitAndCenterChart(canvas);
+        }
+    } catch (err) {
+        console.error('loadUserChart failed:', err);
+    }
+};
 
 document.addEventListener("keydown", (e) => {
     if (e.key === "Delete") {
@@ -8387,7 +9432,10 @@ function drawGuideLines(direction, dx, dy) {
 }
 
 function saveHoldToken(chartId, selectedSeats, holdToken) {
-      const url = `https://localhost:7203/api/chart/Update?chartId=${chartId}&seats=${selectedSeats}&holdToken=${holdToken}`;
+    debugger;
+    const url = `http://localhost:5045/api/chart/Update?chartId=${chartId}&seats=${selectedSeats}&holdToken=${holdToken}`;
+
+   // const url = `https://localhost:7203/api/chart/Update?chartId=${chartId}&seats=${selectedSeats}&holdToken=${holdToken}`;
     //const url = `http://dev.theticketworld.com/seating_api/api/chart/Update?chartId=${chartId}&seats=${selectedSeats}&holdToken=${holdToken}`;
 
     fetch(url, {
@@ -8491,6 +9539,7 @@ function saveCurrentChartWithNewId(newChartId) {
         'rowLabelFormat', 'rowLabelCustomStart'
     ]);
 
+
     const jsonStr = JSON.stringify(json);
 
     // Save with new chart ID
@@ -8517,9 +9566,10 @@ function saveChartAsNew() {
         saveCurrentChartWithNewId(newChartId);
     }
 }
- async function getAvailableCount(chartId, categoryName) {
+async function getAvailableCount(chartId, categoryName) {
     debugger;
-    const url = `https://localhost:7203/api/chart/GetCount?chartId=${chartId}&catname=${encodeURIComponent(categoryName)}`;
+   // const url = `https://localhost:7203/api/chart/GetCount?chartId=${chartId}&catname=${encodeURIComponent(categoryName)}`;
+    const url = `http://localhost:5045/api/chart/GetCount?chartId=${chartId}&catname=${encodeURIComponent(categoryName)}`;
 
     try {
         const response = await fetch(url, {
@@ -8528,7 +9578,7 @@ function saveChartAsNew() {
                 "Content-Type": "application/json"
             }
         });
-       
+
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -8562,3 +9612,62 @@ function saveChartAsNew() {
 
 
 
+
+
+/* Shared SVG chart preview renderer */
+/* Shared-coordinate SVG renderer for the saved SeatsQ chart. Uses the same chartJson.shapes,
+   cats and geometry as chart-editor.js, so preview objects do not get repositioned via Fabric. */
+(function (global) {
+    'use strict';
+    const NS = 'http://www.w3.org/2000/svg', R = 9, SP = 26;
+    let lastRender = null, showRows = true, showSeats = true;
+    const ICONS = {
+        restroom: '<circle cx="6.5" cy="4" r="2.4" fill="currentColor"/><path d="M4 8h5v7H7.5v6h-2v-6H4z" fill="currentColor"/><circle cx="17.5" cy="4" r="2.4" fill="currentColor"/><path d="M17.5 8l3.5 8h-2v5h-3v-5h-2z" fill="currentColor"/><path d="M12 3v18" fill="none" stroke="currentColor" stroke-width="2"/>',
+        man: '<circle cx="12" cy="4" r="2.4" fill="currentColor"/><path d="M8.5 8h7v7h-2v7h-3v-7h-2z" fill="currentColor"/>',
+        woman: '<circle cx="12" cy="4" r="2.4" fill="currentColor"/><path d="M12 8l4.5 9H14v5h-4v-5H7.5z" fill="currentColor"/>',
+        stage: '<path d="M8 4h8l3 11H5zM4 17h16v3H4z" fill="currentColor"/>',
+        entrance: '<path d="M14 4h5v16h-5M4 12h10M10 8l4 4-4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+        exit: '<path d="M10 4H5v16h5M10 12h10M16 8l4 4-4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+        stairs: '<path d="M3 20h5v-5h5v-5h5V5h3" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
+        dining: '<path d="M7 3v18M4 3v6a3 3 0 006 0V3M17 21V3c-2 1-3 4-3 8h3" fill="none" stroke="currentColor" stroke-width="2"/>',
+        bar: '<path d="M4 4h16l-8 9zM12 13v7M8 20h8" fill="none" stroke="currentColor" stroke-width="2"/>',
+        beer: '<path d="M6 6h9v14H6zM15 9h3a2 2 0 012 2v3a2 2 0 01-2 2h-3" fill="none" stroke="currentColor" stroke-width="2"/>',
+        coffee: '<path d="M4 9h12v6a4 4 0 01-4 4H8a4 4 0 01-4-4zM16 11h2a2 2 0 010 4h-2M8 3v3M12 3v3" fill="none" stroke="currentColor" stroke-width="2"/>',
+        warning: '<path d="M12 3l10 18H2zM12 10v5M12 18h.01" fill="none" stroke="currentColor" stroke-width="2"/>',
+        wheelchair: '<circle cx="10" cy="4" r="2" fill="currentColor"/><path d="M10 8v6h5l2 5M7 11a5 5 0 105 8" fill="none" stroke="currentColor" stroke-width="2"/>',
+        info: '<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 11v6M12 7.5v.01" fill="none" stroke="currentColor" stroke-width="2"/>',
+        lift: '<path d="M5 3h14v18H5zM9 10l3-3 3 3M9 14l3 3 3-3" fill="none" stroke="currentColor" stroke-width="2"/>'
+    };
+    const svgEl = (name, attrs, parent) => { const n = document.createElementNS(NS, name); Object.entries(attrs || {}).forEach(([k, v]) => { if (v !== undefined && v !== null) n.setAttribute(k, String(v)) }); if (parent) parent.appendChild(n); return n; };
+    const text = (parent, x, y, str, attrs = {}) => { const n = svgEl('text', { x, y, 'dominant-baseline': 'auto', ...attrs }, parent); n.textContent = str == null ? '' : String(str); return n; };
+    const catMap = (cats, id) => cats.find(c => String(c.id) === String(id)) || { color: '#888', name: '—' };
+    const seatNo = (st, k) => { st = String(st == null ? '1' : st).trim() || '1'; const m = /^(.*?)(\d+)$/.exec(st); if (m) return m[1] + String(+m[2] + k).padStart(m[2].length > 1 && m[2][0] === '0' ? m[2].length : 0, '0'); return /^\d+$/.test(st) ? String(+st + k) : st.slice(0, -1) + String.fromCharCode(st.toUpperCase().charCodeAt(st.length - 1) + k); };
+    function polySeats(pts, n) { const seg = [], lens = []; let total = 0; for (let i = 1; i < pts.length; i++) { const l = Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y); seg.push(l); total += l } const count = n ?? Math.floor(total / SP) + 1, out = []; let si = 0, acc = 0; for (let i = 0; i < count; i++) { const d = i * SP; while (si < seg.length - 1 && d > acc + seg[si]) { acc += seg[si]; si++ } const a = pts[si], b = pts[si + 1] || pts[si], l = seg[si] || 1, t = (d - acc) / l; out.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }) } return out; }
+    function rowSeats(s) { if (s.pts) return { p: polySeats(s.pts, s.count).map((p, i) => ({ ...p, l: seatNo(s.start, s.dir === 'rtl' ? s.count - 1 - i : i) })), cx: 0, cy: 0 }; const dx = s.x2 - s.x1, dy = s.y2 - s.y1, len = Math.hypot(dx, dy) || 1, mx = (s.x1 + s.x2) / 2 + (-dy / len) * (s.curve || 0) * 2, my = (s.y1 + s.y2) / 2 + (dx / len) * (s.curve || 0) * 2, p = []; for (let i = 0; i < s.count; i++) { const t = s.count > 1 ? i / (s.count - 1) : 0, u = 1 - t, k = s.dir === 'rtl' ? s.count - 1 - i : i; p.push({ x: u * u * s.x1 + 2 * u * t * mx + t * t * s.x2, y: u * u * s.y1 + 2 * u * t * my + t * t * s.y2, l: seatNo(s.start, k) }) } return { p, cx: mx, cy: my }; }
+    function tableSeats(s) { const out = []; if (s.shape === 'rect') { const top = Math.ceil(s.count / 2), bot = s.count - top;[[top, -1], [bot, 1]].forEach(([n, dir]) => { for (let i = 0; i < n; i++)if (n) out.push({ x: s.x - s.w / 2 + (i + .5) * s.w / n, y: s.y + dir * (s.h / 2 + R + 4) }) }) } else for (let i = 0; i < s.count; i++) { const a = i / s.count * Math.PI * 2; out.push({ x: s.x + Math.cos(a) * (s.r + R + 4), y: s.y + Math.sin(a) * (s.r + R + 4) }) } return out; }
+    function bounds(s) { if (s.type === 'row') { const p = rowSeats(s).p; const xs = p.map(q => q.x), ys = p.map(q => q.y); return { x: Math.min(...xs) - R - 24, y: Math.min(...ys) - R, w: Math.max(...xs) - Math.min(...xs) + 2 * R + 24, h: Math.max(...ys) - Math.min(...ys) + 2 * R } } if (s.type === 'table') return s.shape === 'rect' ? { x: s.x - s.w / 2 - R - 8, y: s.y - s.h / 2 - R - 8, w: s.w + 2 * R + 16, h: s.h + 2 * R + 16 } : { x: s.x - s.r - R - 8, y: s.y - s.r - R - 8, w: 2 * (s.r + R + 8), h: 2 * (s.r + R + 8) }; if (s.type === 'icon') return { x: s.x - s.size / 2, y: s.y - s.size / 2, w: s.size, h: s.size }; if (s.type === 'line') return { x: Math.min(s.x1, s.x2) - 6, y: Math.min(s.y1, s.y2) - 6, w: Math.abs(s.x2 - s.x1) + 12, h: Math.abs(s.y2 - s.y1) + 12 }; if (s.type === 'focal') return { x: s.x - 20, y: s.y - 20, w: 40, h: 40 }; if (s.type === 'text') return { x: s.x, y: s.y - s.size, w: (s.text || 'Text').length * s.size * .6, h: s.size * 1.3 }; if (s.pts) { const xs = s.pts.map(p => p.x), ys = s.pts.map(p => p.y); return { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) } } return { x: s.x, y: s.y, w: s.w, h: s.h }; }
+    function center(s) { const b = bounds(s); return { x: b.x + b.w / 2, y: b.y + b.h / 2 }; }
+    function render(containerId, chartJson, seatsJson) {
+        lastRender = { containerId, chartJson, seatsJson }; const host = document.getElementById(containerId); if (!host) return; let data; try { data = typeof chartJson === 'string' ? JSON.parse(chartJson) : chartJson } catch (e) { console.error('Invalid chart JSON', e); return } const shapes = data.shapes || [], cats = data.cats || []; let seatRows = []; try { seatRows = typeof seatsJson === 'string' ? JSON.parse(seatsJson || '[]') : (seatsJson || []) } catch { } if (!Array.isArray(seatRows)) seatRows = seatRows?.Tables?.[0]?.Rows || [];
+        host.innerHTML = ''; host.style.position = 'relative'; host.style.minHeight = host.style.minHeight || '800px'; host.style.overflow = 'hidden'; host.style.backgroundColor = '#fff'; host.style.backgroundImage = 'radial-gradient(#d7e2f4 1px, transparent 1px)'; host.style.backgroundSize = '20px 20px';
+        const all = []; shapes.forEach(s => { const b = bounds(s); all.push(b) }); if (!all.length) return; const minX = Math.min(...all.map(b => b.x)), minY = Math.min(...all.map(b => b.y)), maxX = Math.max(...all.map(b => b.x + b.w)), maxY = Math.max(...all.map(b => b.y + b.h)); const pad = 50, vw = Math.max(1, maxX - minX + pad * 2), vh = Math.max(1, maxY - minY + pad * 2); const svg = svgEl('svg', { viewBox: `${minX - pad} ${minY - pad} ${vw} ${vh}`, width: '100%', height: '800px', preserveAspectRatio: 'xMidYMid meet', role: 'img', 'aria-label': 'Seating chart preview' }, host); svg.style.display = 'block'; svg.style.minHeight = '800px'; svg.style.overflow = 'visible';
+        // index seat metadata by row+seat name; category assignments from saved chart data take precedence
+        const seatLookup = new Map(); seatRows.forEach(r => seatLookup.set(String(r.seat_name || r.seat || ''), r));
+        shapes.slice().sort((a, b) => (b.type === 'focal') - (a.type === 'focal')).forEach(s => {
+            const c = catMap(cats, s.cat).color, cc = center(s), g = svgEl('g', { transform: `rotate(${s.rot || 0} ${cc.x} ${cc.y})` }, svg);
+            if (s.type === 'row') { const q = rowSeats(s); q.p.forEach((p, i) => { const sd = (s.sd && s.sd[i]) || {}, seatName = (s.label || '') + '-' + (sd.label || p.l), db = seatLookup.get(seatName), cat = catMap(cats, sd.cat || s.cat), fill = cat.color; const circle = svgEl('circle', { cx: p.x, cy: p.y, r: R, fill, stroke: '#fff', 'stroke-width': 1.5, 'data-seat': seatName, tabindex: 0 }, g); const tip = [`Row: ${s.label || ''}`, `Seat: ${sd.label || p.l}`, `Category: ${cat.name}`, db?.status ? `Status: ${db.status}` : ''].filter(Boolean).join('\n'); circle.addEventListener('mouseenter', () => showTip(host, tip)); circle.addEventListener('mouseleave', hideTip); circle.addEventListener('focus', () => showTip(host, tip)); circle.addEventListener('blur', hideTip); if (showSeats) text(g, p.x, p.y + 3, sd.label || p.l, { 'text-anchor': 'middle', 'font-size': 8, 'font-weight': 600, fill: '#fff', 'pointer-events': 'none' }); }); const l = q.p[0].x <= q.p[q.p.length - 1].x ? q.p[0] : q.p[q.p.length - 1]; if (showRows && s.lblOn !== false) text(g, l.x - 22, l.y + 4, s.label, { 'text-anchor': 'middle', 'font-size': 12, 'font-weight': 700, fill: '#64708f' }); }
+            else if (s.type === 'table') { const tableFill = c + '33', stroke = c; if (s.shape === 'rect') svgEl('rect', { x: s.x - s.w / 2, y: s.y - s.h / 2, width: s.w, height: s.h, rx: 8, fill: tableFill, stroke, 'stroke-width': 1.5 }, g); else svgEl('circle', { cx: s.x, cy: s.y, r: s.r, fill: tableFill, stroke, 'stroke-width': 1.5 }, g); tableSeats(s).forEach((p, i) => { const cat = catMap(cats, s.cat), seatName = (s.label || 'T') + '-' + (i + 1), tip = `Table: ${s.label || ''}\nSeat: ${i + 1}\nCategory: ${cat.name}`; const el = svgEl('circle', { cx: p.x, cy: p.y, r: R, fill: cat.color, stroke: '#fff', 'stroke-width': 1.5, tabindex: 0, 'data-seat': seatName }, g); el.addEventListener('mouseenter', () => showTip(host, tip)); el.addEventListener('mouseleave', hideTip); if (showSeats) text(g, p.x, p.y + 3, String(i + 1), { 'text-anchor': 'middle', 'font-size': 8, 'font-weight': 600, fill: '#fff', 'pointer-events': 'none' }); }); text(g, s.x, s.y + 4, s.label, { 'text-anchor': 'middle', 'font-size': 13, 'font-weight': 700, fill: '#1e2540' }); }
+            else if (s.type === 'icon') { const ig = svgEl('g', { transform: `translate(${s.x - s.size / 2} ${s.y - s.size / 2}) scale(${s.size / 24})`, style: `color:${s.color || '#1e2540'}` }, g); ig.innerHTML = ICONS[s.ic] || ''; }
+            else if (s.type === 'line') { const dx = s.x2 - s.x1, dy = s.y2 - s.y1, len = Math.hypot(dx, dy) || 1, ux = dx / len, uy = dy / len, hs = 6 + (s.w || 3) * 2; svgEl('line', { x1: s.x1, y1: s.y1, x2: s.arrow ? s.x2 - ux * hs * .6 : s.x2, y2: s.arrow ? s.y2 - uy * hs * .6 : s.y2, stroke: s.color || '#1e2540', 'stroke-width': s.w || 3, 'stroke-dasharray': s.dash || '0' }, g); if (s.arrow) svgEl('polygon', { points: `${s.x2},${s.y2} ${s.x2 - ux * hs - uy * hs * .5},${s.y2 - uy * hs + ux * hs * .5} ${s.x2 - ux * hs + uy * hs * .5},${s.y2 - uy * hs - ux * hs * .5}`, fill: s.color || '#1e2540' }, g); }
+            else if (s.type === 'text') text(g, s.x, s.y, s.text || 'Text', { 'font-size': s.size || 18, 'font-weight': 600, fill: s.color || '#1e2540' });
+            else if (s.type === 'focal') { const R0 = s.r || 120, gid = 'chartFocal' + Math.random().toString(36).slice(2, 8), df = svgEl('defs', {}, g), gr = svgEl('radialGradient', { id: gid }, df);[[0, .5], [.45, .3], [.8, .1], [1, 0]].forEach(([o, a]) => svgEl('stop', { offset: o, 'stop-color': '#ef4444', 'stop-opacity': a }, gr)); svgEl('circle', { cx: s.x, cy: s.y, r: R0, fill: `url(#${gid})`, 'pointer-events': 'none' }, g); svgEl('circle', { cx: s.x, cy: s.y, r: 7, fill: '#ef4444', stroke: '#fff', 'stroke-width': 2, 'pointer-events': 'none' }, g); text(g, s.x + 14, s.y - 12, 'Focal point', { 'font-size': 11, 'font-weight': 700, fill: '#ef4444', 'pointer-events': 'none' }); }
+            else { const isRect = s.type === 'rect', shape = s.shape || 'rect'; if (shape === 'poly' && s.pts) svgEl('polygon', { points: s.pts.map(p => `${p.x},${p.y}`).join(' '), fill: isRect ? '#e6e9f4' : c + '2a', stroke: isRect ? '#b9c1da' : c, 'stroke-width': 1.5, 'stroke-dasharray': s.type === 'general' ? '7 5' : '0' }, g); else if (shape === 'circle') svgEl('ellipse', { cx: s.x + s.w / 2, cy: s.y + s.h / 2, rx: s.w / 2, ry: s.h / 2, fill: isRect ? '#e6e9f4' : c + '2a', stroke: isRect ? '#b9c1da' : c, 'stroke-width': 1.5, 'stroke-dasharray': s.type === 'general' ? '7 5' : '0' }, g); else svgEl('rect', { x: s.x, y: s.y, width: s.w, height: s.h, rx: 10, fill: isRect ? '#e6e9f4' : c + '2a', stroke: isRect ? '#b9c1da' : c, 'stroke-width': 1.5, 'stroke-dasharray': s.type === 'general' ? '7 5' : '0' }, g); text(g, s.x + s.w / 2, s.y + s.h / 2 + 5, s.label || '', { 'text-anchor': 'middle', 'font-size': 14, 'font-weight': 600, fill: '#1e2540' }); if (s.type === 'general') text(g, s.x + s.w / 2, s.y + s.h / 2 + 23, (s.cap || 0) + ' capacity', { 'text-anchor': 'middle', 'font-size': 11, fill: '#7a85a6' }); }
+        });
+        if (!document.getElementById('chartPreviewTooltipStyle')) { const style = document.createElement('style'); style.id = 'chartPreviewTooltipStyle'; style.textContent = '.chart-preview-tip{position:fixed;z-index:99999;display:none;pointer-events:none;white-space:pre-line;background:#202438;color:#fff;padding:7px 10px;border-radius:6px;font:12px/1.45 system-ui,sans-serif;box-shadow:0 4px 16px #0002}'; document.head.appendChild(style) }
+    }
+    function showTip(host, content) { let tip = document.getElementById('chartPreviewTooltip'); if (!tip) { tip = document.createElement('div'); tip.id = 'chartPreviewTooltip'; tip.className = 'chart-preview-tip'; document.body.appendChild(tip) } tip.textContent = content; tip.style.display = 'block'; const move = e => { tip.style.left = (e.clientX + 12) + 'px'; tip.style.top = (e.clientY + 12) + 'px' }; host.onmousemove = move; }
+    function showLoader(id) { const h = document.getElementById(id); if (!h) return; if (!document.getElementById('chartPreviewLoaderStyle')) { const st = document.createElement('style'); st.id = 'chartPreviewLoaderStyle'; st.textContent = '.cp-loader{position:absolute;inset:0;min-height:300px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#fff;font:600 13px system-ui,sans-serif;color:#6b7694}.cp-loader i{width:40px;height:40px;border:4px solid #e4e8f2;border-top-color:#4f46e5;border-radius:50%;animation:cpSpin .8s linear infinite}@keyframes cpSpin{to{transform:rotate(360deg)}}'; document.head.appendChild(st) } h.style.position = 'relative'; hideLoader(id); const l = document.createElement('div'); l.className = 'cp-loader'; l.innerHTML = '<i></i><span>Loading chart…</span>'; h.appendChild(l) }
+    function hideLoader(id) { const h = document.getElementById(id); if (h) h.querySelectorAll('.cp-loader').forEach(x => x.remove()) }
+    function hideTip() { const t = document.getElementById('chartPreviewTooltip'); if (t) t.style.display = 'none' }
+    global.chartPreviewRenderer = { render, showLoader, hideLoader, toggleRowLabels() { showRows = !showRows; if (lastRender) render(lastRender.containerId, lastRender.chartJson, lastRender.seatsJson); return showRows; }, toggleSeatLabels() { showSeats = !showSeats; if (lastRender) render(lastRender.containerId, lastRender.chartJson, lastRender.seatsJson); return showSeats; } };
+})(window);

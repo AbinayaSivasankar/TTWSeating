@@ -1,2336 +1,1375 @@
-﻿@page "/index/{ChartID}"
-@using DataLayer;
+@page "/index/{ChartID}"
+@implements IAsyncDisposable
 @using System.Collections.Specialized
 @using System.Data
+@using DataLayer
 @using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
-@using Newtonsoft.Json
-@inject NavigationManager NavManager;
-@inject ProtectedSessionStorage sessionStorage;
+@using Microsoft.JSInterop
+@inject NavigationManager NavManager
 @inject IJSRuntime JS
+@inject ProtectedSessionStorage Session
 
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
 
 <style>
-    /* ─── RESET & ROOT ─── */
-    *, *::before, *::after {
-        box-sizing: border-box;
-        margin: 0;
-        padding: 0;
+    :root {
+        --bg: #f3f5fa;
+        --pan: #fff;
+        --soft: #f7f8fc;
+        --line: #e4e8f2;
+        --tx: #1e2540;
+        --mu: #6b7694;
+        --ac: #4f46e5;
+        --acs: #eef0ff;
+        --dg: #e5484d;
+        --sh: 0 1px 2px #1e254012,0 4px 14px #1e25400d
     }
 
-    :root {
-        /* Warm Terracotta palette */
-        --bg-body: #f7f2eb;
-        --bg-surface: #fefcf8;
-        --bg-card: #ffffff;
-        --bg-elevated: #f5ede4;
-        --bg-hover: #f0e6da;
-        --bg-active: #e8d9c9;
-        --border-subtle: #e5d6c6;
-        --border-medium: #d4c0ab;
-        --border-strong: #bfa692;
-        --text-primary: #3a2c24;
-        --text-secondary: #6b5747;
-        --text-muted: #a48d7a;
-        --text-inverse: #ffffff;
-        --accent-1: #c9694b;
-        --accent-1-dark: #a84f34;
-        --accent-1-light: #e8a187;
-        --accent-1-glow: rgba(201, 105, 75, 0.20);
-        --accent-2: #d99b7a;
-        --accent-success: #6b8f71;
-        --accent-danger: #c05a4a;
-        --radius-sm: 6px;
-        --radius-md: 10px;
-        --radius-lg: 16px;
-        --radius-xl: 20px;
-        --radius-full: 9999px;
-        --shadow-card: 0 2px 16px rgba(90, 60, 40, 0.06), 0 1px 3px rgba(90, 60, 40, 0.03);
-        --shadow-elevated: 0 8px 32px rgba(90, 60, 40, 0.08);
-        --shadow-glow: 0 0 30px rgba(201, 105, 75, 0.12);
-        --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        --transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
-        /* Warning Colors */
-        --warning-1: #ff9800;
-        --warning-2: #f57c00;
-        --warning-glow: rgba(255, 152, 0, 0.4);
+
+    * {
+        box-sizing: border-box;
+        margin: 0
+    }
+
+    .editor-root {
+        position: fixed;
+        inset: 0;
+        z-index: 1000;
+        font: 13.5px/1.4 "Segoe UI",Inter,system-ui,sans-serif;
+        background: var(--bg);
+        color: var(--tx);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden
     }
 
     html, body {
-        height: 100%;
-        font-family: var(--font);
-        background: var(--bg-body);
-        color: var(--text-primary);
-        -webkit-font-smoothing: antialiased;
+        overflow: hidden
     }
 
-    /* ─── SCROLLBAR ─── */
-    ::-webkit-scrollbar {
-        width: 4px;
-        height: 4px;
+    button {
+        font: inherit;
+        color: inherit;
+        background: none;
+        border: 0;
+        cursor: pointer
     }
 
-    ::-webkit-scrollbar-track {
-        background: var(--bg-body);
+    input, select {
+        font: inherit;
+        color: var(--tx);
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 7px 10px;
+        width: 100%
     }
 
-    ::-webkit-scrollbar-thumb {
-        background: var(--accent-1-light);
-        border-radius: var(--radius-full);
-    }
-
-    /* ─── APP SHELL ─── */
-    .terracotta-shell {
-        display: flex;
-        flex-direction: column;
-        height: 100vh;
-        overflow: hidden;
-        background: var(--bg-body);
-    }
-
-    /* ─── TOP BAR ─── */
-    .terracotta-topbar {
-        height: 56px;
-        background: var(--bg-surface);
-        border-bottom: 1px solid var(--border-subtle);
-        display: flex;
-        align-items: center;
-        padding: 0 20px;
-        gap: 16px;
-        flex-shrink: 0;
-        z-index: 100;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.02);
-    }
-
-    .terracotta-brand {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        font-size: 16px;
-        font-weight: 700;
-        color: var(--text-primary);
-        letter-spacing: -0.02em;
-        white-space: nowrap;
-    }
-
-        .terracotta-brand .brand-icon {
-            width: 32px;
-            height: 32px;
-            border-radius: var(--radius-md);
-            background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 14px;
-            color: white;
-            box-shadow: 0 2px 12px var(--accent-1-glow);
+        input:focus, select:focus {
+            outline: 0;
+            border-color: var(--ac);
+            box-shadow: 0 0 0 3px #4f46e522
         }
 
-        .terracotta-brand .brand-dot {
-            color: var(--accent-2);
-        }
-
-    .terracotta-title-input {
-        background: var(--bg-body);
-        border: 1px solid var(--border-subtle);
-        border-radius: var(--radius-md);
-        color: var(--text-primary);
-        padding: 6px 14px;
-        font-size: 13px;
-        font-family: var(--font);
-        width: 220px;
-        outline: none;
-        transition: var(--transition);
-    }
-
-        .terracotta-title-input:focus {
-            border-color: var(--accent-1);
-            box-shadow: 0 0 0 3px var(--accent-1-glow);
-            background: var(--bg-surface);
-        }
-
-        .terracotta-title-input::placeholder {
-            color: var(--text-muted);
-        }
-
-    .terracotta-spacer {
-        flex: 1;
-    }
-
-    .terracotta-topbar-divider {
-        width: 1px;
-        height: 26px;
-        background: var(--border-subtle);
-        margin: 0 6px;
-    }
-
-    .terracotta-tb-btn {
-        width: 34px;
-        height: 34px;
-        border-radius: var(--radius-md);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        color: var(--text-muted);
-        transition: var(--transition);
-        position: relative;
-        background: transparent;
-        border: none;
-        font-size: 14px;
-    }
-
-        .terracotta-tb-btn:hover {
-            background: var(--bg-hover);
-            color: var(--text-primary);
-        }
-
-        .terracotta-tb-btn .terracotta-tip {
-            position: absolute;
-            bottom: -32px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: var(--bg-surface);
-            color: var(--text-secondary);
-            font-size: 10px;
-            padding: 2px 10px;
-            border-radius: var(--radius-sm);
-            white-space: nowrap;
-            pointer-events: none;
-            opacity: 0;
-            transition: var(--transition);
-            border: 1px solid var(--border-subtle);
-            font-weight: 500;
-            box-shadow: var(--shadow-elevated);
-        }
-
-        .terracotta-tb-btn:hover .terracotta-tip {
-            opacity: 1;
-            bottom: -34px;
-        }
-
-    .terracotta-avatar {
-        width: 34px;
-        height: 34px;
-        border-radius: var(--radius-full);
-        background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 13px;
-        font-weight: 600;
-        color: white;
-        cursor: pointer;
-        margin-left: 4px;
-        border: 2px solid var(--bg-surface);
-        box-shadow: 0 2px 10px var(--accent-1-glow);
-        transition: var(--transition);
-    }
-
-        .terracotta-avatar:hover {
-            transform: scale(1.05);
-            box-shadow: 0 4px 20px var(--accent-1-glow);
-        }
-
-    /* ─── UNIFIED TOOLBAR (horizontal) ─── */
-    .terracotta-toolbar {
-        background: var(--bg-surface);
-        border-bottom: 1px solid var(--border-subtle);
-        padding: 6px 20px;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        flex-shrink: 0;
-        overflow-x: auto;
-        flex-wrap: nowrap;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.01);
-    }
-
-        .terracotta-toolbar .terracotta-tb-group {
-            display: flex;
-            align-items: center;
-            gap: 2px;
-            padding: 0 8px;
-            border-right: 1px solid var(--border-subtle);
-        }
-
-            .terracotta-toolbar .terracotta-tb-group:last-child {
-                border-right: none;
-            }
-
-        .terracotta-toolbar .terracotta-tb-label {
-            font-size: 9px;
-            font-weight: 600;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            letter-spacing: 0.06em;
-            margin-right: 6px;
-            white-space: nowrap;
-        }
-
-    .terracotta-tool-btn {
-        display: flex;
-        align-items: center;
-        gap: 5px;
-        padding: 5px 12px;
-        border-radius: var(--radius-full);
-        border: none;
-        background: transparent;
-        color: var(--text-secondary);
-        font-size: 12px;
-        font-weight: 500;
-        font-family: var(--font);
-        cursor: pointer;
-        transition: var(--transition);
-        white-space: nowrap;
-    }
-
-        .terracotta-tool-btn i {
-            font-size: 14px;
-            color: var(--text-muted);
-            transition: var(--transition);
-        }
-
-        .terracotta-tool-btn:hover {
-            background: var(--bg-hover);
-            color: var(--text-primary);
-        }
-
-            .terracotta-tool-btn:hover i {
-                color: var(--text-secondary);
-            }
-
-        .terracotta-tool-btn.active {
-            background: var(--bg-active);
-            color: var(--accent-1);
-            box-shadow: 0 0 0 1.5px var(--accent-1-glow);
-        }
-
-            .terracotta-tool-btn.active i {
-                color: var(--accent-1);
-            }
-
-        .terracotta-tool-btn.danger {
-            color: var(--accent-danger);
-        }
-
-            .terracotta-tool-btn.danger i {
-                color: var(--accent-danger);
-            }
-
-            .terracotta-tool-btn.danger:hover {
-                background: rgba(192, 90, 74, 0.08);
-            }
-
-    /* ─── WORKSPACE ─── */
-    .terracotta-workspace {
-        display: flex;
-        flex: 1;
-        overflow: hidden;
-        gap: 0;
-    }
-
-    /* ─── LEFT SIDEBAR (icons only) ─── */
-    .terracotta-sidebar {
-        width: 56px;
-        background: var(--bg-surface);
-        border-right: 1px solid var(--border-subtle);
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        padding: 12px 0;
-        gap: 4px;
-        flex-shrink: 0;
-        overflow-y: auto;
-    }
-
-    .terracotta-sidebar-divider {
-        width: 24px;
-        height: 1px;
-        background: var(--border-subtle);
-        margin: 6px 0;
-    }
-
-    .terracotta-sb-btn {
-        width: 40px;
-        height: 40px;
-        border-radius: var(--radius-md);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        color: var(--text-muted);
-        transition: var(--transition);
-        border: none;
-        background: transparent;
-        font-size: 16px;
-        position: relative;
-    }
-
-        .terracotta-sb-btn:hover {
-            background: var(--bg-hover);
-            color: var(--text-primary);
-        }
-
-        .terracotta-sb-btn.active {
-            background: var(--bg-active);
-            color: var(--accent-1);
-            box-shadow: 0 0 0 1.5px var(--accent-1-glow);
-        }
-
-        .terracotta-sb-btn.danger {
-            color: var(--accent-danger);
-        }
-
-            .terracotta-sb-btn.danger:hover {
-                background: rgba(192, 90, 74, 0.08);
-            }
-
-        .terracotta-sb-btn .terracotta-sb-tip {
-            position: absolute;
-            left: 40px;
-            top: 50%;
-            transform: translateY(-50%);
-            background: var(--bg-surface);
-            color: var(--text-secondary);
-            font-size: 10px;
-            padding: 2px 10px;
-            border-radius: var(--radius-sm);
-            white-space: nowrap;
-            pointer-events: none;
-            opacity: 0;
-            transition: var(--transition);
-            border: 1px solid var(--border-subtle);
-            font-weight: 500;
-            box-shadow: var(--shadow-elevated);
-            z-index: 200;
-        }
-
-        .terracotta-sb-btn:hover .terracotta-sb-tip {
-            opacity: 1;
-            left: 46px;
-        }
-
-    /* ─── MAIN CANVAS AREA ─── */
-    .terracotta-main {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        padding: 14px 16px 16px 16px;
-        gap: 0;
-        overflow: hidden;
-        position: relative;
-        background: var(--bg-body);
-    }
-
-    .terracotta-canvas-card {
-        flex: 1;
-        background: var(--bg-surface);
-        border-radius: var(--radius-xl);
-        border: 1px solid var(--border-subtle);
-        box-shadow: var(--shadow-card);
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-        position: relative;
-    }
-
-    .terracotta-canvas-header {
-        display: flex;
-        align-items: center;
-        padding: 10px 18px;
-        border-bottom: 1px solid var(--border-subtle);
-        gap: 12px;
-        flex-shrink: 0;
-        background: rgba(255,255,255,0.5);
-    }
-
-        .terracotta-canvas-header .terracotta-ch-label {
-            font-size: 10px;
-            font-weight: 600;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-        }
-
-        .terracotta-canvas-header .terracotta-ch-title {
-            flex: 1;
-            font-size: 15px;
-            font-weight: 500;
-            border: none;
-            outline: none;
-            background: transparent;
-            color: var(--text-primary);
-            font-family: var(--font);
-            padding: 2px 0;
-        }
-
-            .terracotta-canvas-header .terracotta-ch-title::placeholder {
-                color: var(--text-muted);
-            }
-
-        .terracotta-canvas-header .terracotta-ch-badge {
-            font-size: 11px;
-            color: var(--text-secondary);
-            background: var(--bg-body);
-            border: 1px solid var(--border-subtle);
-            border-radius: var(--radius-full);
-            padding: 2px 14px;
-            font-weight: 500;
-        }
-
-    .terracotta-canvas-inner {
-        flex: 1;
-        position: relative;
-        background: #fdfaf7;
-        background-image: radial-gradient(circle, #e5d6c6 1px, transparent 1px);
-        background-size: 24px 24px;
-        overflow: hidden;
-    }
-
-    #myCanvas {
-        width: 100%;
-        height: 100%;
-        position: absolute;
-        inset: 0;
-    }
-
-        #myCanvas canvas {
-            border-radius: 0 0 var(--radius-xl) var(--radius-xl);
-        }
-
-    /* ─── FLOATING TOOLBAR ─── */
-    .terracotta-float-bar {
-        position: absolute;
-        top: 14px;
-        left: 50%;
-        transform: translateX(-50%);
-        display: flex;
-        align-items: center;
-        gap: 2px;
-        background: var(--bg-surface);
-        border: 1px solid var(--border-subtle);
-        border-radius: var(--radius-lg);
-        padding: 4px 8px;
-        box-shadow: var(--shadow-elevated);
-        z-index: 50;
-        backdrop-filter: blur(10px);
-    }
-
-        .terracotta-float-bar .terracotta-ft-btn {
-            width: 32px;
-            height: 32px;
-            border-radius: var(--radius-sm);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            color: var(--text-muted);
-            transition: var(--transition);
-            border: none;
-            background: transparent;
-            font-size: 13px;
-            position: relative;
-        }
-
-            .terracotta-float-bar .terracotta-ft-btn:hover {
-                background: var(--bg-hover);
-                color: var(--text-primary);
-            }
-
-        .terracotta-float-bar .terracotta-ft-sep {
-            width: 1px;
-            height: 20px;
-            background: var(--border-subtle);
-            margin: 0 4px;
-        }
-
-        .terracotta-float-bar .terracotta-ft-btn .terracotta-tip {
-            position: absolute;
-            bottom: -30px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: var(--bg-surface);
-            color: var(--text-secondary);
-            font-size: 10px;
-            padding: 2px 10px;
-            border-radius: var(--radius-sm);
-            white-space: nowrap;
-            pointer-events: none;
-            opacity: 0;
-            transition: var(--transition);
-            border: 1px solid var(--border-subtle);
-            font-weight: 500;
-            box-shadow: var(--shadow-elevated);
-        }
-
-        .terracotta-float-bar .terracotta-ft-btn:hover .terracotta-tip {
-            opacity: 1;
-            bottom: -34px;
-        }
-
-    /* ─── CANVAS ACTIONS ─── */
-    .terracotta-canvas-actions {
-        position: absolute;
-        bottom: 20px;
-        right: 20px;
-        display: flex;
-        gap: 12px;
-        z-index: 50;
-    }
-
-    .terracotta-btn {
-        padding: 8px 20px;
-        font-size: 12px;
-        font-weight: 600;
-        border-radius: var(--radius-md);
-        cursor: pointer;
-        transition: var(--transition);
-        font-family: var(--font);
-        border: none;
-        letter-spacing: 0.02em;
-        display: flex;
-        align-items: center;
-        gap: 7px;
-    }
-
-        .terracotta-btn:active {
-            transform: scale(0.96);
-        }
-
-    .terracotta-btn-primary {
-        background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
-        color: white;
-        box-shadow: 0 4px 16px var(--accent-1-glow);
-    }
-
-        .terracotta-btn-primary:hover {
-            box-shadow: 0 6px 24px var(--accent-1-glow);
-            transform: translateY(-1px);
-        }
-
-    .terracotta-btn-ghost {
-        background: var(--bg-body);
-        color: var(--text-secondary);
-        border: 1px solid var(--border-subtle);
-    }
-
-        .terracotta-btn-ghost:hover {
-            background: var(--bg-hover);
-            color: var(--text-primary);
-            border-color: var(--border-medium);
-        }
-    /* ========== WARNING BUTTON ========== */
-    .warning-btn-primary {
-        background: linear-gradient(135deg, var(--warning-1), var(--warning-2));
-        color: white;
-        box-shadow: 0 4px 16px var(--warning-glow);
-        border: none;
-        padding: 10px 24px;
-        border-radius: 6px;
-        font-size: 14px;
-        font-weight: 500;
-        cursor: pointer;
-        transition: all 0.3s ease;
-    }
-
-        .warning-btn-primary:hover {
-            box-shadow: 0 6px 24px rgba(255, 152, 0, 0.5);
-            transform: translateY(-1px);
-        }
-
-        .warning-btn-primary:active {
-            transform: translateY(0px);
-            box-shadow: 0 2px 8px rgba(255, 152, 0, 0.3);
-        }
-
-    .btn-warning {
-        background: linear-gradient(135deg, #ff9800, #f57c00);
-        color: white;
-        box-shadow: 0 4px 16px rgba(255, 152, 0, 0.4);
-        border: none;
-        padding: 10px 24px;
-        border-radius: 6px;
-        font-size: 14px;
-        font-weight: 500;
-        cursor: pointer;
-        transition: all 0.3s ease;
-    }
-
-        .btn-warning:hover {
-            box-shadow: 0 6px 24px rgba(255, 152, 0, 0.5);
-            transform: translateY(-1px);
-        }
-    /* ─── RIGHT PANEL ─── */
-    .terracotta-right {
-        width: 270px;
-        background: var(--bg-surface);
-        border-left: 1px solid var(--border-subtle);
-        display: flex;
-        flex-direction: column;
-        flex-shrink: 0;
-        overflow-y: auto;
-        padding: 16px 18px 20px;
-        gap: 0;
-    }
-
-    .terracotta-panel-section {
-        margin-bottom: 18px;
-    }
-
-        .terracotta-panel-section:last-child {
-            margin-bottom: 0;
-        }
-
-    .terracotta-panel-label {
-        font-size: 10px;
-        font-weight: 700;
-        color: var(--text-muted);
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        margin-bottom: 8px;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-
-        .terracotta-panel-label::after {
-            content: '';
-            flex: 1;
-            height: 1px;
-            background: var(--border-subtle);
-        }
-
-    .terracotta-field-label {
-        font-size: 11px;
-        font-weight: 500;
-        color: var(--text-secondary);
-        margin-top: 6px;
-    }
-
-        .terracotta-field-label:first-of-type {
-            margin-top: 0;
-        }
-
-    .terracotta-select, .terracotta-input {
-        width: 100%;
-        font-size: 12px;
-        padding: 6px 12px;
-        border-radius: var(--radius-sm);
-        border: 1px solid var(--border-subtle);
-        background: var(--bg-body);
-        color: var(--text-primary);
-        outline: none;
-        font-family: var(--font);
-        transition: var(--transition);
-        appearance: auto;
-    }
-
-        .terracotta-select:focus, .terracotta-input:focus {
-            border-color: var(--accent-1);
-            box-shadow: 0 0 0 3px var(--accent-1-glow);
-            background: var(--bg-surface);
-        }
-
-    /* Category chips */
-    .terracotta-cat-manage {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        width: 100%;
-        padding: 7px 14px;
-        background: var(--accent-1-glow);
-        color: var(--accent-1-dark);
-        border: 1px solid rgba(201, 105, 75, 0.20);
-        border-radius: var(--radius-md);
-        font-size: 12px;
-        font-weight: 500;
-        cursor: pointer;
-        font-family: var(--font);
-        transition: var(--transition);
-        margin-bottom: 8px;
-    }
-
-        .terracotta-cat-manage:hover {
-            background: rgba(201, 105, 75, 0.12);
-            border-color: rgba(201, 105, 75, 0.35);
-        }
-
-    .terracotta-cat-chip {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 5px 12px;
-        border-radius: var(--radius-md);
-        border: 1px solid var(--border-subtle);
-        margin-bottom: 4px;
-        cursor: pointer;
-        transition: var(--transition);
-        font-size: 12px;
-        color: var(--text-secondary);
-        background: var(--bg-body);
-    }
-
-        .terracotta-cat-chip:hover {
-            border-color: var(--border-medium);
-            background: var(--bg-hover);
-            color: var(--text-primary);
-        }
-
-    .terracotta-cat-dot {
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        flex-shrink: 0;
-        border: 1px solid var(--border-subtle);
-    }
-
-    .terracotta-cat-name {
-        flex: 1;
-        font-weight: 450;
-    }
-
-    .terracotta-cat-add {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 5px 12px;
-        border-radius: var(--radius-md);
-        border: 1px dashed var(--border-medium);
-        font-size: 12px;
-        color: var(--text-muted);
-        cursor: pointer;
-        transition: var(--transition);
-        margin-top: 2px;
-    }
-
-        .terracotta-cat-add:hover {
-            color: var(--accent-1);
-            border-color: var(--accent-1);
-            background: var(--accent-1-glow);
-        }
-
-    /* Validation */
-    .terracotta-val-error {
-        display: flex;
-        align-items: flex-start;
-        gap: 8px;
-        padding: 7px 12px;
-        background: rgba(192, 90, 74, 0.06);
-        border-left: 3px solid var(--accent-danger);
-        border-radius: var(--radius-sm);
-        font-size: 11px;
-        color: var(--accent-danger);
-        margin-top: 6px;
-    }
-
-    .terracotta-curved-btn {
-        width: 100%;
-        padding: 7px 14px;
-        background: var(--bg-body);
-        color: var(--text-secondary);
-        border: 1px solid var(--border-subtle);
-        border-radius: var(--radius-md);
-        font-size: 12px;
-        font-family: var(--font);
-        cursor: pointer;
-        transition: var(--transition);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 6px;
-    }
-
-        .terracotta-curved-btn:hover {
-            background: var(--bg-hover);
-            color: var(--text-primary);
-            border-color: var(--border-medium);
-        }
-
-    .terracotta-apply-btn {
-        width: 100%;
-        margin-top: 10px;
-        padding: 8px 16px;
-        background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
-        border: none;
-        border-radius: var(--radius-md);
-        color: white;
-        font-size: 12px;
-        font-weight: 600;
-        cursor: pointer;
-        font-family: var(--font);
-        transition: var(--transition);
-        box-shadow: 0 4px 16px var(--accent-1-glow);
-        letter-spacing: 0.02em;
-    }
-
-        .terracotta-apply-btn:hover {
-            box-shadow: 0 6px 24px var(--accent-1-glow);
-            transform: translateY(-1px);
-        }
-
-    .terracotta-cap-row {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-top: 4px;
-    }
-
-    .terracotta-cap-btn {
-        width: 28px;
-        height: 28px;
-        border-radius: var(--radius-sm);
-        border: 1px solid var(--border-subtle);
-        background: var(--bg-body);
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: var(--text-secondary);
-        font-size: 13px;
-        transition: var(--transition);
-    }
-
-        .terracotta-cap-btn:hover {
-            background: var(--bg-hover);
-            color: var(--text-primary);
-            border-color: var(--border-medium);
-        }
-
-    .terracotta-cap-input {
-        flex: 1;
-        text-align: center;
-        font-size: 13px;
-        padding: 4px 8px;
-        border: 1px solid var(--border-subtle);
-        border-radius: var(--radius-sm);
-        background: var(--bg-body);
-        color: var(--text-primary);
-        font-family: var(--font);
-        outline: none;
-        transition: var(--transition);
-        min-width: 40px;
-    }
-
-        .terracotta-cap-input:focus {
-            border-color: var(--accent-1);
-            box-shadow: 0 0 0 3px var(--accent-1-glow);
-            background: var(--bg-surface);
-        }
-
-    /* ─── MODALS ─── */
-    .modal-content {
-        border-radius: var(--radius-xl);
-        border: 1px solid var(--border-subtle);
-        background: var(--bg-surface);
-        color: var(--text-primary);
-        box-shadow: var(--shadow-elevated);
-    }
-
-    .modal-header {
-        border-bottom: 1px solid var(--border-subtle);
-        padding: 16px 24px 12px;
-        background: var(--bg-body);
-        border-radius: var(--radius-xl) var(--radius-xl) 0 0;
-    }
-
-    .modal-title {
-        font-size: 16px;
-        font-weight: 600;
-        color: var(--text-primary);
-        display: flex;
-        align-items: center;
-        gap: 10px;
-    }
-
-        .modal-title i {
-            color: var(--accent-1);
-        }
-
-    .modal-body {
-        padding: 18px 24px;
-    }
-
-    .modal-footer {
-        border-top: 1px solid var(--border-subtle);
-        padding: 12px 24px 18px;
-        background: var(--bg-body);
-        border-radius: 0 0 var(--radius-xl) var(--radius-xl);
-    }
-
-    .btn-close {
-        opacity: 0.5;
-        transition: var(--transition);
-    }
-
-        .btn-close:hover {
-            opacity: 0.8;
-        }
-
-    .terracotta-modal-add-btn {
-        background: var(--accent-1);
-        color: white;
-        border: none;
-        border-radius: var(--radius-md);
-        padding: 5px 16px;
-        font-size: 12px;
-        font-weight: 500;
-        cursor: pointer;
-        font-family: var(--font);
-        transition: var(--transition);
-        display: flex;
-        align-items: center;
-        gap: 5px;
-    }
-
-        .terracotta-modal-add-btn:hover {
-            background: var(--accent-1-dark);
-            box-shadow: 0 4px 16px var(--accent-1-glow);
-        }
-
-    .terracotta-modal-save-btn {
-        background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
-        color: white;
-        border: none;
-        border-radius: var(--radius-md);
-        padding: 7px 22px;
-        font-size: 13px;
-        font-weight: 600;
-        cursor: pointer;
-        font-family: var(--font);
-        transition: var(--transition);
-        box-shadow: 0 4px 16px var(--accent-1-glow);
-    }
-
-        .terracotta-modal-save-btn:hover {
-            box-shadow: 0 6px 24px var(--accent-1-glow);
-            transform: translateY(-1px);
-        }
-
-    .category-list {
-        max-height: 280px;
-        overflow-y: auto;
-        margin-top: 4px;
-    }
-
-    .category-card {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        background: var(--bg-body);
-        padding: 7px 14px;
-        border-radius: var(--radius-md);
-        margin-bottom: 6px;
-        transition: var(--transition);
-        border: 1px solid var(--border-subtle);
-    }
-
-        .category-card:hover {
-            background: var(--bg-hover);
-            border-color: var(--border-medium);
-        }
-
-    .category-left {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        flex: 1;
-    }
-
-    .cat-color {
-        width: 28px;
-        height: 28px;
-        border-radius: var(--radius-sm);
-        border: 2px solid var(--border-subtle);
-        cursor: pointer;
-        padding: 0;
-        background: transparent;
-    }
-
-        .cat-color::-webkit-color-swatch-wrapper {
+        input[type=range] {
             padding: 0;
+            accent-color: var(--ac);
+            border: 0;
+            box-shadow: none
         }
 
-        .cat-color::-webkit-color-swatch {
-            border: none;
-            border-radius: var(--radius-sm);
+        input[type=color] {
+            padding: 0;
+            width: 24px;
+            height: 24px;
+            border: 0;
+            border-radius: 50%;
+            background: none;
+            cursor: pointer
         }
 
-    .cat-name-label {
-        font-size: 13px;
-        font-weight: 500;
-        color: var(--text-primary);
-        cursor: pointer;
+    h5 {
+        font-size: 11px;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        color: var(--mu);
+        font-weight: 700
     }
 
-    .cat-name-input {
-        border: 1px solid var(--border-subtle);
-        border-radius: var(--radius-sm);
-        padding: 3px 10px;
-        font-size: 12px;
-        font-family: var(--font);
-        outline: none;
-        background: var(--bg-surface);
-        color: var(--text-primary);
-        width: 130px;
-    }
-
-        .cat-name-input:focus {
-            border-color: var(--accent-1);
-            box-shadow: 0 0 0 3px var(--accent-1-glow);
-        }
-
-    .delete-icon {
-        color: var(--text-muted);
-        cursor: pointer;
-        transition: var(--transition);
-        font-size: 14px;
-        padding: 4px;
-        border-radius: var(--radius-sm);
-    }
-
-        .delete-icon:hover {
-            color: var(--accent-danger);
-            background: rgba(192, 90, 74, 0.06);
-            transform: scale(1.1);
-        }
-
-    /* ─── SUCCESS MODAL ─── */
-    .success-modal {
-        position: fixed;
-        inset: 0;
-        background: rgba(0, 0, 0, 0.30);
-        display: none;
+    .top {
+        height: 56px;
+        background: var(--pan);
+        border-bottom: 1px solid var(--line);
+        display: flex;
         align-items: center;
-        justify-content: center;
-        z-index: 99999;
-        animation: fadeIn 0.25s ease;
-        backdrop-filter: blur(4px);
+        gap: 10px;
+        padding: 0 16px;
+        flex: none
     }
 
-    .success-box {
-        background: var(--bg-surface);
-        width: 360px;
-        padding: 40px 32px 32px;
-        border-radius: var(--radius-xl);
-        text-align: center;
-        box-shadow: var(--shadow-elevated);
-        border: 1px solid var(--border-subtle);
-        animation: popIn 0.30s ease;
+    .logo {
+        font-weight: 800;
+        font-size: 18px;
+        display: flex;
+        gap: 9px;
+        align-items: center;
+        letter-spacing: -.02em
     }
 
-    .success-icon {
-        font-size: 56px;
-        color: var(--accent-success);
-        filter: drop-shadow(0 4px 20px rgba(107, 143, 113, 0.20));
-    }
-
-    .success-title {
-        margin-top: 16px;
-        font-size: 20px;
-        font-weight: 700;
-        color: var(--text-primary);
-    }
-
-    .success-sub {
-        margin-top: 4px;
-        font-size: 13px;
-        color: var(--text-muted);
-    }
-
-    .success-ok-btn {
-        margin-top: 24px;
-        padding: 9px 36px;
-        background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
-        color: white;
-        border: none;
-        border-radius: var(--radius-md);
-        font-size: 14px;
-        font-weight: 600;
-        cursor: pointer;
-        font-family: var(--font);
-        transition: var(--transition);
-        box-shadow: 0 4px 20px var(--accent-1-glow);
-    }
-
-        .success-ok-btn:hover {
-            box-shadow: 0 6px 28px var(--accent-1-glow);
-            transform: translateY(-1px);
-        }
-
-    /* ─── TOOLTIPS ─── */
-    #rowTooltip, #seatTooltip {
-        position: fixed;
-        background: var(--bg-surface);
-        color: var(--text-secondary);
-        padding: 4px 14px;
-        border-radius: var(--radius-sm);
-        font-size: 11px;
-        pointer-events: none;
-        z-index: 10000;
-        white-space: nowrap;
-        display: none;
-        border: 1px solid var(--border-subtle);
-        font-weight: 500;
-        box-shadow: var(--shadow-elevated);
-    }
-
-    .rotation-tooltip {
-        position: absolute;
-        background: var(--bg-surface);
-        color: var(--text-secondary);
-        padding: 4px 14px;
-        border-radius: var(--radius-sm);
-        font-size: 11px;
-        pointer-events: none;
-        z-index: 1000;
-        display: none;
-        border: 1px solid var(--border-subtle);
-        font-weight: 500;
-        box-shadow: var(--shadow-elevated);
-    }
-
-    /* ─── ANIMATIONS ─── */
-    @@keyframes fadeIn {
-        from {
-            opacity: 0;
-        }
-
-        to {
-            opacity: 1;
-        }
-    }
-
-    @@keyframes popIn {
-        0% {
-            transform: scale(0.90) translateY(10px);
-            opacity: 0;
-        }
-
-        100% {
-            transform: scale(1) translateY(0);
-            opacity: 1;
-        }
-    }
-
-    /* ─── RESPONSIVE ─── */
-    @@media (max-width: 1100px) {
-        .terracotta-right {
-            position: absolute;
-            right: 0;
-            top: 112px; /* topbar + toolbar */
-            height: calc(100% - 112px);
-            z-index: 200;
-            transform: translateX(100%);
-            transition: transform 0.30s cubic-bezier(0.4, 0, 0.2, 1);
-            box-shadow: -8px 0 40px rgba(0, 0, 0, 0.06);
-            border-left: 1px solid var(--border-subtle);
-            width: 270px;
-        }
-
-            .terracotta-right.open {
-                transform: translateX(0);
-            }
-    }
-
-    @@media (max-width: 768px) {
-        .terracotta-toolbar {
-            padding: 4px 12px;
-            gap: 2px;
-            overflow-x: auto;
-        }
-
-        .terracotta-tool-btn {
-            padding: 4px 8px;
-            font-size: 11px;
-        }
-
-            .terracotta-tool-btn i {
-                font-size: 12px;
-            }
-
-        .terracotta-toolbar .terracotta-tb-label {
-            display: none;
-        }
-
-        .terracotta-title-input {
-            width: 120px;
-        }
-
-        .terracotta-topbar {
-            padding: 0 12px;
-            gap: 10px;
-        }
-
-        .terracotta-brand .brand-text {
-            display: none;
-        }
-
-        .terracotta-sidebar {
-            width: 48px;
-        }
-
-        .terracotta-sb-btn {
-            width: 36px;
-            height: 36px;
+        .logo i {
+            width: 32px;
+            height: 32px;
+            border-radius: 10px;
+            background: var(--ac);
+            display: grid;
+            place-items: center;
             font-size: 14px;
+            color: #fff;
+            box-shadow: 0 4px 10px #4f46e540
         }
 
-        .terracotta-float-bar {
-            top: 8px;
-            padding: 3px 6px;
+    .crumb {
+        color: #b4bbd0;
+        font-size: 18px
+    }
+
+    .ttl {
+        width: 260px;
+        font-weight: 600;
+        font-size: 14.5px;
+        border-color: transparent;
+        background: transparent
+    }
+
+        .ttl:hover {
+            background: var(--soft)
         }
 
-            .terracotta-float-bar .terracotta-ft-btn {
-                width: 28px;
-                height: 28px;
-                font-size: 12px;
+        .ttl:focus {
+            background: #fff
+        }
+
+    .sp {
+        flex: 1
+    }
+
+    .bt {
+        padding: 0px 20px;
+        height: 44px;
+        border-radius: 24px;
+        font-weight: 600;
+        border: 1px solid var(--line);
+        background: #fff;
+        box-shadow: var(--sh)
+    }
+
+        .bt:hover {
+            background: var(--soft)
+        }
+
+        .bt.pr {
+            background: var(--ac);
+            border-color: var(--ac);
+            color: #fff;
+            box-shadow: inset 0 0 1px #9590ff, inset 0 -2px 0 #0003, 0 1px 2px #0006, 0 8px 24px -6px #5b5bf099 !important;
+        }
+
+            .bt.pr:hover {
+                filter: brightness(1.1)
             }
 
-        .terracotta-canvas-actions {
-            bottom: 12px;
-            right: 12px;
-            gap: 6px;
-        }
-
-        .terracotta-btn {
-            padding: 6px 14px;
-            font-size: 11px;
-        }
-
-        .terracotta-right {
-            width: 230px;
-            padding: 12px;
-        }
-    }
-
-    .terracotta-dropdown {
+    .av {
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        background: var(--acs);
+        color: var(--ac);
+        display: grid;
+        place-items: center;
+        font-weight: 700;
         position: relative;
-        display: inline-block;
+        cursor: pointer;
+        border: 1px solid #d9dcff
     }
 
-    .terracotta-dropdown-menu {
+    .mn {
+        display: none;
         position: absolute;
         right: 0;
         top: 42px;
-        background: var(--bg-surface);
-        border: 1px solid var(--border-subtle);
-        border-radius: var(--radius-md);
-        box-shadow: var(--shadow-elevated);
-        min-width: 140px;
-        padding: 6px 0;
-        z-index: 9999;
-        display: none;
-        overflow: hidden;
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        min-width: 200px;
+        padding: 6px;
+        z-index: 60;
+        box-shadow: 0 12px 32px #1e254026;
+        font-weight: 400;
+        color: var(--tx)
     }
 
-        .terracotta-dropdown-menu.show {
-            display: block;
+        .mn.show {
+            display: block
         }
 
-    .terracotta-dropdown-item {
-        padding: 8px 16px;
-        font-size: 13px;
-        color: var(--text-secondary);
-        cursor: pointer;
+        .mn div {
+            padding: 8px 10px;
+            color: var(--mu);
+            font-size: 12px;
+            border-bottom: 1px solid var(--line);
+            margin-bottom: 4px
+        }
+
+        .mn button {
+            width: 100%;
+            text-align: left;
+            padding: 8px 10px;
+            border-radius: 8px
+        }
+
+            .mn button:hover {
+                background: var(--soft)
+            }
+
+    .bar {
+        background: var(--pan);
+        border-bottom: 1px solid var(--line);
         display: flex;
+        align-items: stretch;
+        gap: 4px;
+        padding: 6px 16px;
+        flex: none
+    }
+
+    .grp {
+        display: flex;
+        flex-direction: column;
         align-items: center;
-        gap: 10px;
-        transition: var(--transition);
-        border: none;
-        background: transparent;
-        width: 100%;
-        font-family: var(--font);
+        padding: 0 8px
     }
 
-        .terracotta-dropdown-item:hover {
-            background: var(--bg-hover);
-            color: var(--text-primary);
+        .grp .gi {
+            display: flex;
+            gap: 2px
         }
 
-        .terracotta-dropdown-item i {
-            width: 16px;
-            text-align: center;
+        .grp .cap {
+            font-size: 10px;
+            color: #9aa3bd;
+            margin-top: 3px;
+            letter-spacing: .04em
         }
 
-    .terracotta-dropdown-menu .dropdown-user-info {
-        padding: 8px 18px 4px;
-        font-size: 12px;
-        color: var(--text-muted);
-        border-bottom: 1px solid var(--border-subtle);
-        margin-bottom: 4px;
+    .gs {
+        width: 1px;
+        background: var(--line);
+        margin: 2px 6px
     }
 
-        .terracotta-dropdown-menu .dropdown-user-info .user-email {
-            font-weight: 500;
-            color: var(--text-primary);
-            font-size: 13px;
-        }
-
-    .terracotta-tb-btn,
-    .terracotta-sb-btn,
-    .terracotta-ft-btn {
-        position: relative;
-    }
-
-        /* Optional: increase z-index for tooltips */
-        .terracotta-tb-btn .terracotta-tip,
-        .terracotta-sb-btn .terracotta-sb-tip,
-        .terracotta-ft-btn .terracotta-tip {
-            z-index: 9999;
-        }
-
-    /* Allow sidebar tooltips to spill out to the right */
-    .terracotta-sidebar {
-        overflow: visible !important; /* overrides overflow-y: auto; keep both axes visible */
-    }
-
-    /* Allow floating toolbar tooltips to extend beyond the canvas area */
-    .terracotta-canvas-inner {
-        overflow: visible !important; /* but the canvas itself needs overflow hidden? It's a child, so fine */
-    }
-
-    /* Ensure tooltips are above everything */
-    .terracotta-tb-btn .terracotta-tip,
-    .terracotta-sb-btn .terracotta-sb-tip,
-    .terracotta-ft-btn .terracotta-tip {
-        z-index: 99999 !important;
-    }
-
-    .terracotta-shell {
-        overflow: visible !important;
-    }
-
-    .terracotta-tip,
-    .terracotta-sb-tip,
-    .terracotta-ft-btn .terracotta-tip {
-        background: var(--text-primary) !important;
-        color: #fff !important;
-        border-color: var(--text-primary) !important;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
-    }
-
-    canvas {
-        touch-action: none !important;
-        -webkit-touch-callout: none !important;
-        -webkit-user-select: none !important;
-        user-select: none !important;
-    }
-
-    #seatCanvas, #userCanvas {
-        touch-action: none !important;
-    }
-
-
-    #ticketTypePopup {
-        display: none;
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.5);
-        z-index: 10001;
-        justify-content: center;
+    .tl {
+        width: 58px;
+        padding: 6px 0 5px;
+        border-radius: 10px;
+        color: #56617f;
+        display: flex;
+        flex-direction: column;
         align-items: center;
+        gap: 3px;
+        font-size: 11px;
+        font-weight: 500
     }
 
-    .ticket-type-option {
+        .tl i {
+            font-size: 16px
+        }
+
+        .tl:hover {
+            background: var(--soft);
+            color: var(--tx)
+        }
+
+        .tl.on {
+            background: var(--acs);
+            color: var(--ac);
+            box-shadow: inset 0 0 0 1.5px #c9ceff;
+            font-weight: 600
+        }
+
+    .ib {
+        width: 36px;
+        height: 42px;
+        border-radius: 10px;
+        color: #56617f;
+        display: grid;
+        place-items: center;
+        font-size: 15px
+    }
+
+        .ib:hover {
+            background: var(--soft);
+            color: var(--tx)
+        }
+
+        .ib:disabled {
+            opacity: .3;
+            pointer-events: none
+        }
+
+        .ib.on {
+            background: var(--acs);
+            color: var(--ac)
+        }
+
+    .main {
+        flex: 1;
+        display: flex;
+        min-height: 0;
+        gap: 12px;
+        padding: 12px
+    }
+
+    .left, .right {
+        background: var(--pan);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        box-shadow: var(--sh);
+        display: flex;
+        flex-direction: column;
+        flex: none;
+        overflow: hidden
+    }
+
+    .left {
+        width: 250px
+    }
+
+    .right {
+        width: 300px;
+        overflow: auto
+    }
+
+    .blk {
+        border-bottom: 1px solid var(--line);
+        padding-bottom: 10px
+    }
+
+        .blk.grow {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            border: 0;
+            padding-bottom: 0
+        }
+
+    .bh {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 12px 16px;
-        margin-bottom: 8px;
-        border: 2px solid #e0e0e0;
-        border-radius: 8px;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        background: white;
+        padding: 13px 14px 9px
     }
 
-        .ticket-type-option:hover {
-            border-color: #2196F3;
-            background: #f5f9ff;
+    .badge {
+        background: var(--soft);
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        padding: 0 8px;
+        font-size: 11px;
+        color: var(--mu)
+    }
+
+    .add {
+        color: var(--ac);
+        font-weight: 600;
+        font-size: 12.5px;
+        padding: 3px 8px;
+        border-radius: 7px
+    }
+
+        .add:hover {
+            background: var(--acs)
         }
 
-        .ticket-type-option.selected {
-            border-color: #4CAF50;
-            background: #f0f8f0;
+    .ct {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 8px;
+        margin: 0 10px 5px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        cursor: pointer;
+        background: #fff
+    }
+
+        .ct:hover {
+            background: var(--soft)
         }
 
-        .ticket-type-option .ticket-type-name {
-            font-weight: 500;
-            color: #333;
+        .ct.a {
+            border-color: var(--ac);
+            background: var(--acs)
         }
 
-        .ticket-type-option .ticket-type-price {
-            color: #4CAF50;
-            font-weight: bold;
+        .ct input[type=text] {
+            border: 0;
+            background: none;
+            padding: 2px;
+            flex: 1;
+            min-width: 0;
+            box-shadow: none;
+            font-weight: 500
         }
+
+        .ct .n {
+            font-size: 11px;
+            color: var(--mu);
+            background: #fff;
+            border-radius: 10px;
+            padding: 0 7px;
+            border: 1px solid var(--line)
+        }
+
+        .ct button {
+            color: #aab2c9
+        }
+
+            .ct button:hover {
+                color: var(--dg)
+            }
+
+    .objs {
+        flex: 1;
+        overflow: auto;
+        padding: 0 8px 10px
+    }
+
+    .ob {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 7px 9px;
+        border-radius: 9px;
+        cursor: pointer;
+        font-size: 12.5px
+    }
+
+        .ob:hover {
+            background: var(--soft)
+        }
+
+        .ob.sel {
+            background: var(--acs);
+            color: var(--ac)
+        }
+
+        .ob i {
+            width: 16px;
+            text-align: center;
+            color: #8f99b5
+        }
+
+        .ob.sel i {
+            color: var(--ac)
+        }
+
+        .ob .d {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-left: auto;
+            flex: none
+        }
+
+        .ob small {
+            color: var(--mu)
+        }
+
+    .cv {
+        flex: 1;
+        position: relative;
+        min-width: 0;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        box-shadow: var(--sh);
+        overflow: hidden;
+        background: #fcfdff;
+        background-image: radial-gradient(#cdd4e6 1.2px,transparent 1.2px);
+        background-size: 20px 20px
+    }
+
+        .cv.nogrid {
+            background-image: none
+        }
+
+    svg#st {
+        width: 100%;
+        height: 100%;
+        display: block;
+        touch-action: none
+    }
+
+    .hint {
+        position: absolute;
+        top: 12px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 12px;
+        color: var(--mu);
+        background: #fffd;
+        border: 1px solid var(--line);
+        padding: 5px 14px;
+        border-radius: 20px;
+        pointer-events: none;
+        white-space: nowrap;
+        box-shadow: var(--sh)
+    }
+
+    .zm {
+        position: absolute;
+        right: 12px;
+        bottom: 12px;
+        display: flex;
+        align-items: center;
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        box-shadow: var(--sh)
+    }
+
+        .zm button {
+            width: 34px;
+            height: 34px;
+            color: var(--mu)
+        }
+
+            .zm button:hover {
+                color: var(--ac)
+            }
+
+        .zm span {
+            min-width: 48px;
+            text-align: center;
+            font-size: 12px;
+            color: var(--mu)
+        }
+
+    .in {
+        padding: 0 14px 14px
+    }
+
+    .f {
+        margin-bottom: 10px
+    }
+
+        .f label {
+            display: block;
+            font-size: 11.5px;
+            color: var(--mu);
+            margin-bottom: 4px;
+            font-weight: 500
+        }
+
+    .g2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px
+    }
+
+    .stp {
+        display: flex
+    }
+
+        .stp button {
+            width: 36px;
+            background: var(--soft);
+            border: 1px solid var(--line)
+        }
+
+        .stp input {
+            border-radius: 0;
+            text-align: center
+        }
+
+        .stp button:first-child {
+            border-radius: 8px 0 0 8px;
+            border-right: 0
+        }
+
+        .stp button:last-child {
+            border-radius: 0 8px 8px 0;
+            border-left: 0
+        }
+
+    .ap {
+        width: 100%;
+        padding: 10px;
+        border-radius: 10px;
+        background: var(--ac);
+        font-weight: 600;
+        color: #fff;
+        box-shadow: 0 4px 12px #4f46e533
+    }
+
+        .ap:hover {
+            filter: brightness(1.1)
+        }
+
+    .row2 {
+        display: flex;
+        gap: 6px;
+        margin-top: 8px
+    }
+
+        .row2 button {
+            flex: 1;
+            padding: 8px;
+            border-radius: 9px;
+            background: var(--soft);
+            border: 1px solid var(--line);
+            font-size: 12.5px
+        }
+
+            .row2 button:hover {
+                background: #fff;
+                border-color: #c9d0e4
+            }
+
+        .row2 .dg:hover {
+            border-color: var(--dg);
+            color: var(--dg)
+        }
+
+    .er {
+        display: none;
+        margin: 8px 10px 0;
+        padding: 8px 11px;
+        border-radius: 9px;
+        background: #fff0f0;
+        color: #c0343a;
+        font-size: 12px;
+        border: 1px solid #ffd6d8
+    }
+
+    .em {
+        text-align: center;
+        color: var(--mu);
+        padding: 30px 12px;
+        background: var(--soft);
+        border: 1px dashed var(--line);
+        border-radius: 12px
+    }
+
+        .em i {
+            display: block;
+            font-size: 26px;
+            margin-bottom: 8px;
+            color: #b4bbd0
+        }
+
+    .bot {
+        height: 42px;
+        background: var(--pan);
+        border-top: 1px solid var(--line);
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 0 18px;
+        flex: none;
+        font-size: 12px;
+        color: var(--mu);
+        overflow: auto;
+        white-space: nowrap
+    }
+
+        .bot b {
+            color: var(--tx)
+        }
+
+    .chip {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+        padding: 4px 10px;
+        border-radius: 20px;
+        border: 1px solid var(--line);
+        background: #fff
+    }
+
+        .chip:hover {
+            background: var(--acs);
+            border-color: #c9ceff
+        }
+
+        .chip i {
+            width: 9px;
+            height: 9px;
+            border-radius: 50%
+        }
+
+    .toast {
+        position: fixed;
+        left: 50%;
+        bottom: 60px;
+        transform: translate(-50%,16px);
+        background: var(--tx);
+        color: #fff;
+        padding: 10px 18px;
+        border-radius: 12px;
+        opacity: 0;
+        transition: .2s;
+        pointer-events: none;
+        font-weight: 600;
+        box-shadow: 0 10px 30px #1e254040
+    }
+
+        .toast.show {
+            opacity: 1;
+            transform: translate(-50%,0)
+        }
+
+    i svg {
+        width: 1em;
+        height: 1em;
+        vertical-align: -.14em;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        display: inline-block
+    }
+
+    i {
+        font-style: normal
+    }
+
+    .pop {
+        transform-box: fill-box;
+        transform-origin: center;
+        animation: pop .3s cubic-bezier(.3,1.7,.5,1) both
+    }
+
+    @@keyframes pop {
+        from {
+            transform: scale(0);
+            opacity: 0
+        }
+
+        to {
+            transform: scale(1);
+            opacity: 1
+        }
+    }
+
+    .pulse {
+        transform-box: fill-box;
+        transform-origin: center;
+        animation: pulse 1s ease-in-out infinite
+    }
+
+    @@keyframes pulse {
+        0%, 100% {
+            transform: scale(1);
+            opacity: 1
+        }
+
+        50% {
+            transform: scale(1.35);
+            opacity: .45
+        }
+    }
+
+    .joy {
+        position: absolute;
+        right: 30px;
+        bottom: 60px;
+        width: 86px;
+        height: 86px;
+        border-radius: 50%;
+        background: #fff;
+        border: 1px solid var(--line);
+        box-shadow: var(--sh);
+        touch-action: none;
+        user-select: none;
+        cursor: grab
+    }
+
+        .joy b {
+            position: absolute;
+            font-size: 9px;
+            color: #b4bbd0;
+            font-weight: 400
+        }
+
+        .joy .u {
+            left: 38px;
+            top: 5px
+        }
+
+        .joy .d {
+            left: 38px;
+            bottom: 5px
+        }
+
+        .joy .l {
+            left: 7px;
+            top: 36px
+        }
+
+        .joy .r {
+            right: 7px;
+            top: 36px
+        }
+
+    .knob {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 38px;
+        height: 38px;
+        margin: -19px 0 0 -19px;
+        border-radius: 50%;
+        background: radial-gradient(circle at 35% 30%,#7b74f0,var(--ac));
+        box-shadow: 0 3px 8px #4f46e550;
+        pointer-events: none
+    }
+
+    .modes {
+        position: absolute;
+        left: 12px;
+        top: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 8px;
+        box-shadow: var(--sh);
+        min-width: 150px;
+        z-index: 5
+    }
+
+        .modes h6 {
+            font-size: 10.5px;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+            color: var(--mu);
+            margin: 0 4px 4px
+        }
+
+    .md {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        padding: 7px 9px;
+        border-radius: 9px;
+        font-size: 12.5px;
+        text-align: left
+    }
+
+        .md:hover {
+            background: var(--soft)
+        }
+
+        .md.on {
+            background: var(--acs);
+            color: var(--ac);
+            font-weight: 600
+        }
+
+        .md svg {
+            width: 20px;
+            height: 20px;
+            stroke: currentColor;
+            fill: none;
+            stroke-width: 1.8;
+            stroke-linecap: round;
+            stroke-linejoin: round
+        }
+
+    .sm {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 9px 10px;
+        border-radius: 9px;
+        font-size: 12.5px;
+        margin-top: 5px;
+        background: var(--soft);
+        border: 1px solid var(--line)
+    }
+
+        .sm span {
+            flex: 1
+        }
+
+        .sm.ok i:first-child {
+            color: #16a34a
+        }
+
+        .sm.bad {
+            cursor: pointer;
+            background: #fffaf0;
+            border-color: #fde7b0
+        }
+
+            .sm.bad i:first-child {
+                color: #d97706
+            }
+
+        .sm i:last-child {
+            color: var(--mu)
+        }
+
+    .ck {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 6px 0;
+        font-size: 12.5px;
+        cursor: pointer;
+        margin: 0
+    }
+
+        .ck input {
+            width: 16px;
+            height: 16px;
+            padding: 0;
+            accent-color: var(--ac)
+        }
+
+        .ck.sub {
+            padding-left: 16px;
+            color: var(--mu)
+        }
+
+        .ck.dis {
+            opacity: .4;
+            pointer-events: none
+        }
+
+    .sh {
+        font-size: 11px;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        color: var(--mu);
+        font-weight: 700;
+        margin: 14px 0 8px;
+        padding-top: 12px;
+        border-top: 1px solid var(--line)
+    }
+
+        .sh:first-child {
+            border: 0;
+            padding-top: 0;
+            margin-top: 0
+        }
+
+    .tl span i {
+        font-size: 9px;
+        display: inline-block;
+        margin-left: 2px
+    }
+
+    .icg {
+        display: grid;
+        grid-template-columns: repeat(3,1fr);
+        gap: 8px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 10px;
+        background: #fff;
+        max-height: 300px;
+        overflow: auto
+    }
+
+    .ig {
+        height: 56px;
+        border-radius: 10px;
+        display: grid;
+        place-items: center;
+        color: var(--tx);
+        border: 1px solid transparent;
+        background: none;
+        cursor: pointer
+    }
+
+        .ig:hover {
+            background: var(--soft)
+        }
+
+        .ig.on {
+            background: var(--ac);
+            color: #fff
+        }
+
+        .ig svg {
+            width: 28px;
+            height: 28px
+        }
+
+    .ldr {
+        position: absolute;
+        inset: 0;
+        z-index: 50;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        background: #fcfdff;
+        transition: opacity .25s
+    }
+
+        .ldr.done {
+            opacity: 0;
+            pointer-events: none
+        }
+
+        .ldr b {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #e4e8f2;
+            border-top-color: #4f46e5;
+            border-radius: 50%;
+            animation: ldrSpin .8s linear infinite
+        }
+
+        .ldr span {
+            font: 600 13px system-ui, sans-serif;
+            color: #6b7694
+        }
+    @@keyframes ldrSpin {
+        to {
+            transform: rotate(360deg)
+        }
+    }
+
+    /* add */
+    .logo img {
+        height: 32px;
+        width: auto;
+        display: block;
+    }
 </style>
 
-<div class="terracotta-shell">
+<div class="editor-root">
 
-    <!-- ─── TOP BAR ─── -->
-    <header class="terracotta-topbar">
-        <div class="terracotta-brand">
-            <div class="brand-icon"><i class="fa-solid fa-couch"></i></div>
-            <span class="brand-text">Seats<span class="brand-dot"></span>Q</span>
-        </div>
+    <div class="top">
+        <div class="logo"><img src="images/seatsq-logo.png" alt="SeatsQ" /></div><span class="crumb">/</span>
+        <input id="title" class="ttl" placeholder="Enter chart name" maxlength="100" autocomplete="off" />
+        <div class="sp"></div>
+        <button class="bt" id="cancel" @onclick="CancelChart"><i class="fa-solid fa-xmark"></i> Cancel</button>
+        <button class="bt" id="copy" @onclick="CopyChart"><i class="fa-regular fa-copy"></i> Copy chart</button>
+        <button class="bt pr" id="save" @onclick="SaveChart"><i class="fa-regular fa-floppy-disk"></i> Save layout</button>
+        <div class="av" id="av">D<div class="mn" id="mn"><div>user@email.com</div><button id="logout" @onclick="Logout"><i class="fa-solid fa-arrow-right-from-bracket"></i> Logout</button></div></div>
+    </div>
 
-        <input class="terracotta-title-input" @bind="ChartTitle" placeholder="Untitled chart" />
-
-        <div class="terracotta-spacer"></div>
-
-        <button class="terracotta-tb-btn" @onclick="Undo" title="Undo">
-            <i class="fa-solid fa-rotate-left"></i>
-            <span class="terracotta-tip">Undo</span>
-        </button>
-        <button class="terracotta-tb-btn" @onclick="Redo" title="Redo">
-            <i class="fa-solid fa-rotate-right"></i>
-            <span class="terracotta-tip">Redo</span>
-        </button>
-
-        <div class="terracotta-topbar-divider"></div>
-
-        <button class="terracotta-tb-btn" @onclick="ZoomInClick" title="Zoom in">
-            <i class="fa-solid fa-magnifying-glass-plus"></i>
-            <span class="terracotta-tip">Zoom in</span>
-        </button>
-        <button class="terracotta-tb-btn" @onclick="ZoomOutClick" title="Zoom out">
-            <i class="fa-solid fa-magnifying-glass-minus"></i>
-            <span class="terracotta-tip">Zoom out</span>
-        </button>
-        <button class="terracotta-tb-btn" @onclick="ResetView" title="Reset view">
-            <i class="fa-solid fa-arrows-rotate"></i>
-            <span class="terracotta-tip">Reset view</span>
-        </button>
-
-        <div class="terracotta-topbar-divider"></div>
-
-        <div class="terracotta-dropdown" @onclick:stopPropagation="true">
-            <div class="terracotta-avatar" @onclick="ToggleDropdown">@UserInitial</div>
-            <div class="terracotta-dropdown-menu @(dropdownVisible ? "show" : "")">
-                <div class="dropdown-user-info">
-                    <div class="user-email">@UserEmail</div>
-                </div>
-                <button class="terracotta-dropdown-item" @onclick="Logout">
-                    <i class="fa-solid fa-arrow-right-from-bracket"></i> Logout
-                </button>
+    <div class="bar">
+        <div id="rib" style="display:flex;gap:4px">
+            <div class="grp">
+                <div class="gi">
+                    <button class="tl on" data-t="select" title="Select (V)"><i class="fa-solid fa-arrow-pointer"></i>Select</button>
+                    <button class="tl" data-t="pan" title="Pan (H)"><i class="fa-regular fa-hand"></i>Pan</button>
+                    <button class="tl" data-t="seat" title="Select seats (E)"><i class="fa-solid fa-chair"></i>Seat</button>
+                </div><span class="cap">NAVIGATE</span>
+            </div>
+            <div class="gs"></div>
+            <div class="grp">
+                <div class="gi">
+                    <button class="tl" data-t="row" title="Rows (R) - single row, multiple rows or by segments"><i class="fa-solid fa-grip-lines"></i><span>Rows<i class="fa-solid fa-chevron-down"></i></span></button>
+                    <button class="tl" data-t="general" title="General admission (G)"><i class="fa-solid fa-layer-group"></i>General</button>
+                    <button class="tl" data-t="table" title="Table (B)"><i class="fa-regular fa-circle"></i>Table</button>
+                </div><span class="cap">SEATING</span>
+            </div>
+            <div class="gs"></div>
+            <div class="grp">
+                <div class="gi">
+                    <button class="tl" data-t="rect" title="Rectangle (A)"><i class="fa-regular fa-square"></i>Rect</button>
+                    <button class="tl" data-t="text" title="Text (T)"><i class="fa-solid fa-font"></i>Text</button>
+                    <button class="tl" data-t="focal" title="Focal point (P)"><i class="fa-solid fa-crosshairs"></i>Focal</button>
+                    <button class="tl" data-t="icon" title="Icon (I) - restroom, stage, exit..."><i class="fa-solid fa-icons"></i>Icon</button>
+                    <button class="tl" data-t="line" title="Line (L)"><i class="fa-solid fa-slash"></i><span>Line<i class="fa-solid fa-chevron-down"></i></span></button>
+                </div><span class="cap">SHAPES</span>
             </div>
         </div>
-    </header>
-
-    <!-- ─── UNIFIED TOOLBAR (horizontal) ─── -->
-    @*  <div class="terracotta-toolbar">
-        <div class="terracotta-tb-group">
-            <span class="terracotta-tb-label">Tools</span>
-            <button class="terracotta-tool-btn @(activeTool == "select" ? "active" : "")" @onclick="SetSelectMode">
-                <i class="fa-solid fa-arrow-pointer"></i> Select
-            </button>
-            <button class="terracotta-tool-btn @(activeTool == "row" ? "active" : "")" @onclick="SetCreateMode">
-                <i class="fa-solid fa-grip-lines"></i> Row
-            </button>
-            <button class="terracotta-tool-btn @(activeTool == "multiplerow" ? "active" : "")" @onclick="CreateMultipleRow">
-                <i class="fa-solid fa-list"></i> Multi
-            </button>
-            <button class="terracotta-tool-btn @(activeTool == "segment" ? "active" : "")" @onclick="CreateSegmentRow">
-                <i class="fa-solid fa-bezier-curve"></i> Segment
-            </button>
-            <button class="terracotta-tool-btn @(activeTool == "general" ? "active" : "")" @onclick="CreateGeneralCategory">
-                <i class="fa-solid fa-layer-group"></i> General
-            </button>
-            <button class="terracotta-tool-btn @(activeTool == "rectangle" ? "active" : "")" @onclick="DrawRect">
-                <i class="fa-regular fa-square"></i> Rect
-            </button>
+        <div class="gs"></div>
+        <div class="grp"><div class="gi"><button class="ib" id="undo" title="Undo (Ctrl+Z)"><i class="fa-solid fa-rotate-left"></i></button><button class="ib" id="redo" title="Redo (Ctrl+Y)"><i class="fa-solid fa-rotate-right"></i></button></div><span class="cap">HISTORY</span></div>
+        <div class="sp"></div>
+        <div class="grp">
+            <div class="gi">
+                <button class="ib on" id="tGrid" title="Show grid"><i class="fa-solid fa-border-all"></i></button>
+                <button class="ib on" id="tSnap" title="Snap to grid"><i class="fa-solid fa-magnet"></i></button>
+                <button class="ib" id="bgBtn" title="Background image (floor plan)"><i class="fa-regular fa-image"></i></button>
+                <button class="ib" id="expBtn" title="Export JSON"><i class="fa-solid fa-download"></i></button>
+                <button class="ib" id="impBtn" title="Import JSON"><i class="fa-solid fa-upload"></i></button>
+            </div><span class="cap">VIEW &amp; FILE</span>
         </div>
-        <div class="terracotta-tb-group">
-            <button class="terracotta-tool-btn danger" @onclick="Deleteseats">
-                <i class="fa-regular fa-trash-can"></i> Delete
-            </button>
-        </div>
-    </div> *@
+        <input type="file" id="fBg" accept="image/*" hidden><input type="file" id="fImp" accept=".json" hidden>
+    </div>
 
-    <!-- ─── WORKSPACE ─── -->
-    <div class="terracotta-workspace">
-
-        <!-- ─── LEFT SIDEBAR (icons) ─── -->
-        <aside class="terracotta-sidebar">
-            <button class="terracotta-sb-btn @(activeTool == "select" ? "active" : "")" @onclick="SetSelectMode">
-                <i class="fa-solid fa-arrow-pointer"></i>
-                <span class="terracotta-sb-tip">Select</span>
-            </button>
-            <button class="terracotta-sb-btn @(activeTool == "row" ? "active" : "")" @onclick="SetCreateMode">
-                <i class="fa-solid fa-grip-lines"></i>
-                <span class="terracotta-sb-tip">Row</span>
-            </button>
-            <button class="terracotta-sb-btn @(activeTool == "multiplerow" ? "active" : "")" @onclick="CreateMultipleRow">
-                <i class="fa-solid fa-list"></i>
-                <span class="terracotta-sb-tip">Multi</span>
-            </button>
-           @*  <button class="terracotta-sb-btn @(activeTool == "segment" ? "active" : "")" @onclick="CreateSegmentRow">
-                <i class="fa-solid fa-bezier-curve"></i>
-                <span class="terracotta-sb-tip">Segment</span>
-            </button> *@
-            <button class="terracotta-sb-btn @(activeTool == "general" ? "active" : "")" @onclick="CreateGeneralCategory">
-                <i class="fa-solid fa-layer-group"></i>
-                <span class="terracotta-sb-tip">General</span>
-            </button>
-            <button class="terracotta-sb-btn @(activeTool == "rectangle" ? "active" : "")" @onclick="DrawRect">
-                <i class="fa-regular fa-square"></i>
-                <span class="terracotta-sb-tip">Rect</span>
-            </button>
-            <div class="terracotta-sidebar-divider"></div>
-            <button class="terracotta-sb-btn danger" @onclick="Deleteseats">
-                <i class="fa-regular fa-trash-can"></i>
-                <span class="terracotta-sb-tip">Delete</span>
-            </button>
+    <div class="main">
+        <aside class="left">
+            <section class="blk"><div class="bh"><h5>Categories</h5><button class="add" id="addCat"><i class="fa-solid fa-plus"></i> Add</button></div><div id="cats"></div><div class="er" id="ce"></div></section>
+            <section class="blk" id="multiNm" style="display:none"><div class="bh"><h5>Multi-row naming</h5></div><div class="in" style="padding-bottom:4px"><div class="f"><label>Starting row label</label><input id="cRow" placeholder="e.g. A or 1"></div></div></section>
+            <section class="blk grow"><div class="bh"><h5>Objects</h5><span class="badge" id="oc"></span></div><div class="objs" id="objs"></div></section>
         </aside>
 
-        <!-- ─── MAIN CANVAS ─── -->
-        <main class="terracotta-main">
-            <div class="terracotta-canvas-card">
-
-                <!-- Canvas header -->
-                <div class="terracotta-canvas-header">
-                    <span class="terracotta-ch-label"><i class="fa-regular fa-pen-to-square" style="margin-right:4px;"></i>Chart</span>
-                    <input class="terracotta-ch-title" @bind="ChartTitle" placeholder="Untitled chart" />
-                    @* <span class="terracotta-ch-badge" id="seatCountBadge">0 seats</span> *@
-                </div>
-
-                <div class="terracotta-canvas-inner">
-
-                    <!-- Floating toolbar -->
-                    <div class="terracotta-float-bar">
-                        <button class="terracotta-ft-btn" @onclick="Undo">
-                            <i class="fa-solid fa-rotate-left"></i>
-                            <span class="terracotta-tip">Undo</span>
-                        </button>
-                        <button class="terracotta-ft-btn" @onclick="Redo">
-                            <i class="fa-solid fa-rotate-right"></i>
-                            <span class="terracotta-tip">Redo</span>
-                        </button>
-                        <div class="terracotta-ft-sep"></div>
-                        <button class="terracotta-ft-btn" @onclick="ZoomInClick">
-                            <i class="fa-solid fa-magnifying-glass-plus"></i>
-                            <span class="terracotta-tip">Zoom in</span>
-                        </button>
-                        <button class="terracotta-ft-btn" @onclick="ZoomOutClick">
-                            <i class="fa-solid fa-magnifying-glass-minus"></i>
-                            <span class="terracotta-tip">Zoom out</span>
-                        </button>
-                        <div class="terracotta-ft-sep"></div>
-                        <button class="terracotta-ft-btn" @onclick="ResetView">
-                            <i class="fa-solid fa-arrows-rotate"></i>
-                            <span class="terracotta-tip">Reset view</span>
-                        </button>
-                    </div>
-
-                    <!-- Fabric canvas -->
-                    <div id="myCanvas">
-                        <canvas id="seatCanvas" width="1370" height="760"></canvas>
-                    </div>
-
-                    <!-- Save / Cancel -->
-                    <div class="terracotta-canvas-actions">
-                        <button class="terracotta-btn terracotta-btn-ghost" @onclick="CancelClick">
-                            <i class="fa-solid fa-xmark"></i>Cancel
-                        </button>
-                        <button class="terracotta-btn terracotta-btn-primary" @onclick="SaveLayout">
-                            <i class="fa-regular fa-floppy-disk"></i>Save layout
-                        </button>
-                        <button class="warning-btn-primary" onclick="saveChartAsNew()">
-                           Copy
-                        </button>
-                    </div>
-
-                </div>
-            </div>
+        <main class="cv" id="cv">
+            <div class="ldr" id="ceLoader"><b></b><span>Loading chart…</span></div>
+            <svg id="st"><g id="w"></g></svg>
+            <div class="modes" id="modes" style="display:none"></div>
+            <div class="hint" id="hint"></div>
+            <div class="joy" id="joy" title="Hold and drag to move around"><b class="u">▲</b><b class="d">▼</b><b class="l">◀</b><b class="r">▶</b><div class="knob" id="knob"></div></div>
+            <div class="zm"><button id="zo" title="Zoom out"><i class="fa-solid fa-minus"></i></button><span id="zl">100%</span><button id="zi" title="Zoom in"><i class="fa-solid fa-plus"></i></button><button id="zr" title="Reset view"><i class="fa-solid fa-expand"></i></button></div>
         </main>
 
-        <!-- ─── RIGHT PANEL ─── -->
-        <aside class="terracotta-right" id="hqRightPanel">
-
-            <!-- Category -->
-            <div class="terracotta-panel-section">
-                <div class="terracotta-panel-label"><i class="fa-solid fa-tag"></i> Category</div>
-                @if (CategoryList != null && CategoryList.Count > 0)
-                {
-                    <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
-                        <select id="ddlcolor" class="terracotta-select" style="flex:1;" onchange="fabricInterop.setSeatColor('seatCanvas')">
-                            <option value="">Select category</option>
-                            @foreach (var item in CategoryList)
-                            {
-                                <option value="@item.color">@item.category</option>
-                            }
-                        </select>
-                        <button class="terracotta-cap-btn" @onclick="OpenCatModal" title="Manage categories">
-                            <i class="fa-solid fa-gear"></i>
-                        </button>
-                    </div>
-                    @foreach (var item in CategoryList)
-                    {
-                        <div class="terracotta-cat-chip">
-                            <div class="terracotta-cat-dot" style="background:@item.color;"></div>
-                            <span class="terracotta-cat-name">@item.category</span>
+        <aside class="right">
+            <div class="bh"><h5>Properties</h5></div>
+            <div class="in">
+                <div class="em" id="none"><i class="fa-regular fa-hand-pointer"></i>Select an object to edit it.<br>Shift-click or drag a box to select many.</div><div id="sum"></div>
+                <div id="icoBox" style="display:none">
+                    <div class="sh">Icon</div><div class="icg" id="icGrid"></div>
+                    <div class="g2" style="margin-top:12px"><div class="f"><label>Size</label><input type="number" id="icSize" min="12" max="400"></div><div class="f"><label>Color</label><input type="color" id="icColor" style="width:100%;height:34px;border-radius:8px;border:1px solid var(--line);padding:2px"></div></div>
+                    <div class="f"><label>Rotation <span id="icRv" style="float:right"></span></label><input type="range" id="icRot" min="0" max="345" step="5"></div>
+                    <div class="row2"><button id="icDup"><i class="fa-regular fa-clone"></i> Duplicate</button><button class="dg" id="icDel"><i class="fa-regular fa-trash-can"></i></button></div>
+                </div>
+                <div id="lineBox" style="display:none">
+                    <div class="sh">Line</div>
+                    <div class="f"><label>Type</label><select id="lnT"><option value="lsolid">Solid</option><option value="ldash">Dashed</option><option value="ldot">Dotted</option></select></div>
+                    <label class="ck"><span>Arrow at end</span><input type="checkbox" id="lnA"></label>
+                    <div class="g2"><div class="f"><label>Width</label><input type="number" id="lnW" min="1" max="30"></div><div class="f"><label>Color</label><input type="color" id="lnC" style="width:100%;height:34px;border-radius:8px;border:1px solid var(--line);padding:2px"></div></div>
+                    <div class="row2"><button id="lnDup"><i class="fa-regular fa-clone"></i> Duplicate</button><button class="dg" id="lnDel"><i class="fa-regular fa-trash-can"></i></button></div>
+                </div>
+                <div id="seatBox" style="display:none">
+                    <div class="sh">Seat <span id="ssN" style="text-transform:none;letter-spacing:0"></span></div>
+                    <div class="f"><label>Category</label><select id="ssCat"></select></div>
+                    <div class="sh">Seat label</div>
+                    <div class="f"><label>Label</label><input id="ssLbl"></div>
+                    <div class="sh">Seat properties</div>
+                    <div class="f"><label>Accessibility</label><select id="ssAcc"><option value="">None</option><option value="wheelchair">Wheelchair space</option><option value="companion">Companion seat</option><option value="accessible">Accessible seat</option></select></div>
+                    <label class="ck"><span>Hearing impaired</span><input type="checkbox" id="ssHear"></label>
+                    <label class="ck sub"><span>CART Services</span><input type="checkbox" id="ssCart"></label>
+                    <label class="ck sub"><span>Sign Language Interpretation</span><input type="checkbox" id="ssSign"></label>
+                    <label class="ck"><span>Restricted view</span><input type="checkbox" id="ssRes"></label>
+                    <label class="ck"><span>Not suitable for vertigo sufferers</span><input type="checkbox" id="ssVer"></label>
+                    <label class="ck"><span>Limited legroom</span><input type="checkbox" id="ssLeg"></label>
+                    <label class="ck"><span>Lift-up armrests</span><input type="checkbox" id="ssArm"></label>
+                </div>
+                <div id="box" style="display:none">
+                    <div class="f" id="fCat"><label>Category</label><select id="sCat"></select></div>
+                    <div id="pRow">
+                        <div class="f"><label>Row label</label><input id="rLbl"></div>
+                        <div class="g2">
+                            <div class="f"><label>First seat label</label><input id="sStart"></div>
+                            <div class="f"><label>Direction</label><select id="sDir"><option value="ltr">Left → Right</option><option value="rtl">Right → Left</option></select></div>
                         </div>
-                    }
-                }
-                else
-                {
-                    <button class="terracotta-cat-manage" @onclick="OpenCatModal">
-                        <i class="fa-solid fa-gear"></i> Manage categories
-                    </button>
-                }
-                <!-- Validation -->
-                <div style="display:none;" id="divvalidate">
-                    <div class="terracotta-val-error"><i class="fa-solid fa-circle-exclamation"></i><p id="lblvalidation"></p></div>
-                    <div class="terracotta-val-error" style="margin-top:6px;"><i class="fa-solid fa-circle-exclamation"></i><p id="catvalidation"></p></div>
+                        <div class="f"><label>Seats in row</label><input type="number" id="sCnt" min="1" max="200"></div>
+                        <div class="f"><label>Curve <span id="cv2" style="float:right"></span></label><input type="range" id="sCurve" min="-150" max="150" step="5"></div>
+                        <div class="f" id="fSp"><label>Seat spacing</label><input type="number" id="rSp" min="14" max="80"></div>
+                        <div class="f"><label>Section label</label><input id="rSec"></div>
+                        <label class="ck"><span>Show row label</span><input type="checkbox" id="rOn"></label>
+                    </div>
+                    <div id="pArea">
+                        <div class="f"><label id="lA">Label</label><input id="aLbl"></div>
+                        <div class="g2" id="wh"><div class="f"><label>Width</label><input type="number" id="aW" min="40"></div><div class="f"><label>Height</label><input type="number" id="aH" min="30"></div></div>
+                        <div class="f" id="fCap"><label>Capacity</label><div class="stp"><button id="cm">−</button><input type="number" id="aCap" min="0"><button id="cp">+</button></div></div>
+                    </div>
+                    <div id="pTable">
+                        <div class="f"><label>Shape</label><select id="tShape"><option value="round">Round</option><option value="rect">Rectangle</option></select></div>
+                        <div class="g2"><div class="f"><label>Seats</label><input type="number" id="tCnt" min="2" max="40"></div><div class="f"><label>Radius</label><input type="number" id="tR" min="20" max="120"></div></div>
+                        <div class="g2" id="tWH"><div class="f"><label>Width</label><input type="number" id="tW" min="60"></div><div class="f"><label>Height</label><input type="number" id="tH" min="30"></div></div>
+                        <div class="f"><label>Table label</label><input id="tLbl"></div>
+                    </div>
+                    <div id="pText"><div class="g2"><div class="f"><label>Text</label><input id="xT"></div><div class="f"><label>Size</label><input type="number" id="xS" min="8" max="80"></div></div></div>
+                    <div class="f" id="fRot"><label>Rotation <span id="rv" style="float:right"></span></label><input type="range" id="sRot" min="0" max="345" step="5"></div>
+                    <button class="ap" id="apply"><i class="fa-solid fa-check"></i> Apply changes</button>
+                    <div class="er" id="se" style="margin:8px 0 0"></div>
+                    <div class="row2"><button id="dup" title="Ctrl+D"><i class="fa-regular fa-clone"></i> Duplicate</button><button id="rot90"><i class="fa-solid fa-rotate-right"></i> 90°</button><button class="dg" id="del" title="Del"><i class="fa-regular fa-trash-can"></i></button></div>
+                    <div class="row2"><button id="selCatAll"><i class="fa-solid fa-object-group"></i> Select all in category</button></div>
                 </div>
             </div>
-
-            <div style="border-top:1px solid var(--border-subtle);margin:6px 0 12px;"></div>
-
-            <!-- Curved rows -->
-            <div class="terracotta-panel-section">
-                <button id="btnCustomizeRows" class="terracotta-curved-btn" style="display:none;" @onclick="CustomizeClick">
-                    <i class="fa-solid fa-wave-square"></i> Curved rows
-                </button>
-            </div>
-
-            <!-- Row label -->
-            <div class="terracotta-panel-section" id="divrowlabel" style="display:none;">
-                <div class="terracotta-panel-label"><i class="fa-regular fa-text"></i> Row label</div>
-                <select class="terracotta-select" id="ddlrow" @onchange="ddlrow_Click">
-                    <option value="">None</option>
-                    <option value="alphabetUpper">A, B, C…</option>
-                    <option value="alphabetLower">a, b, c…</option>
-                    <option value="roman">I, II, III…</option>
-                    <option value="custom">Custom</option>
-                </select>
-                <input type="text" id="txtrowlbl" class="terracotta-input" style="margin-top:6px;" @bind="lbl" />
-            </div>
-
-            @if (ShowCustomRow)
-            {
-                <div class="terracotta-panel-section" id="divcustomrow">
-                    <div class="terracotta-panel-label"><i class="fa-regular fa-pen-to-square"></i> Custom row</div>
-                    <input class="terracotta-input" id="txtCustomRowLabel" placeholder="Starting label…" @bind="CustomRowLabel" />
-                </div>
-            }
-
-            <!-- Seat label -->
-            <div class="terracotta-panel-section" id="divseatlabel" style="display:none;">
-                <div class="terracotta-panel-label"><i class="fa-regular fa-hashtag"></i> Seat label</div>
-                <select class="terracotta-select" id="ddlseat" @onchange="ddlseat_Click">
-                    <option value="">None</option>
-                    <option value="alphabetUpper">A, B, C</option>
-                    <option value="alphabetLower">a, b, c</option>
-                    <option value="number">1, 2, 3</option>
-                    <option value="custom">Custom</option>
-                </select>
-            </div>
-
-            @if (ShowCustomInput)
-            {
-                <div class="terracotta-panel-section" id="divcustomseat">
-                    <div class="terracotta-panel-label"><i class="fa-regular fa-pen-to-square"></i> Custom seat</div>
-                    <input class="terracotta-input" id="txtcustomlbl" placeholder="Starting label…" @bind="CustomSeatLabel" />
-                </div>
-            }
-
-            <!-- Seat direction -->
-            <div class="terracotta-panel-section" id="divdirection" style="display:none;">
-                <div class="terracotta-panel-label"><i class="fa-solid fa-arrow-right"></i> Direction</div>
-                <select class="terracotta-select" id="ddldirection" @bind="SeatDirection">
-                    <option value="LTR">Left to right</option>
-                    <option value="RTL">Right to left</option>
-                </select>
-            </div>
-
-            <!-- Seat count -->
-            <div class="terracotta-panel-section" id="seatcnt" style="display:none;">
-                <div class="terracotta-panel-label"><i class="fa-solid fa-list"></i> Seats per row</div>
-                <input class="terracotta-input" type="number" id="txtseatcount" placeholder="Enter count…" @bind="SeatCount" />
-            </div>
-
-            <button id="btnapply" style="display:none;" class="terracotta-apply-btn" @onclick="ApplyLabel">
-                <i class="fa-solid fa-check"></i> Apply changes
-            </button>
-
-            <!-- Rectangle label -->
-            <div class="terracotta-panel-section" id="ddlrectcontainer" style="display:none;margin-top:10px;">
-                <div class="terracotta-panel-label"><i class="fa-solid fa-rectangle-ad"></i> Area label</div>
-                <select class="terracotta-select" id="ddlrect" onchange="fabricInterop.applyRectangleLabel('seatCanvas')">
-                    <option value="">None</option>
-                    <option value="Stage">Stage</option>
-                    <option value="Food Court">Food Court</option>
-                    <option value="Cafe">Cafe</option>
-                    <option value="Stairs">Stairs</option>
-                </select>
-            </div>
-
-            <!-- General label -->
-            <div class="terracotta-panel-section" id="divgenerallbl" style="display:none;">
-                <div class="terracotta-panel-label"><i class="fa-solid fa-tag"></i> Label</div>
-                <input type="text" id="txtrectlbl" class="terracotta-input" oninput="fabricInterop.applyGeneralCategoryLabel('seatCanvas')" />
-            </div>
-
-            <!-- Capacity -->
-            <div class="terracotta-panel-section" id="divcapacity" style="display:none;">
-                <div class="terracotta-panel-label"><i class="fa-solid fa-users"></i> Capacity</div>
-                <div class="terracotta-cap-row">
-                    <button class="terracotta-cap-btn" onclick="DecrementClick()"><i class="fa-solid fa-minus"></i></button>
-                    <input type="text" id="txtcapacity" class="terracotta-cap-input" @bind="@SeatingCapacity" />
-                    <button class="terracotta-cap-btn" onclick="IncrementClick()"><i class="fa-solid fa-plus"></i></button>
-                </div>
-            </div>
-
         </aside>
     </div>
+    <footer class="bot" id="bot"></footer>
+    <div class="toast" id="toast"></div>
+
 </div>
 
-<!-- ─── CATEGORY MODAL ─── -->
-<div class="modal fade category-modal" id="savealert" data-bs-backdrop="static">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title"><i class="fa-solid fa-layer-group"></i>Manage categories</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-                    <span style="font-size:12px;font-weight:500;color:var(--text-muted);">Your categories</span>
-                    <button class="terracotta-modal-add-btn" @onclick="AddCateory"><i class="fa-solid fa-plus"></i>Add</button>
-                </div>
-                <div id="category" class="category-list">
-                    @if (CategoryList != null && CategoryList.Count > 0)
-                    {
-                        foreach (var cat in CategoryList)
-                        {
-                            <div class="category-card category-row" id="row_@cat.category">
-                                <div class="category-left">
-                                    <input type="color" class="cat-color" value="@cat.color" />
-                                    <label id="lblcat_@cat.category" class="cat-name-label" onclick="editCategory('@cat.category')">@cat.category</label>
-                                    <input id="txtcat_@cat.category" type="text" class="cat-name-input" value="@cat.category" style="display:none;" />
-                                </div>
-                                <i class="fa-regular fa-trash-can delete-icon" onclick="deleteCategory(row_@cat.category)"></i>
-                            </div>
-                        }
-                    }
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="terracotta-modal-save-btn" @onclick="OkClick"><i class="fa-solid fa-check"></i> Save changes</button>
-            </div>
-        </div>
-    </div>
-</div>
+@* The editor script lives in wwwroot/Script/chart-editor.js and is imported as an ES module in OnAfterRenderAsync. *@
 
-<!-- ─── SUCCESS MODAL ─── -->
-<div id="successModal" class="success-modal">
-    <div class="success-box">
-        <div class="success-icon"><i class="fa-solid fa-circle-check"></i></div>
-        <h2 class="success-title">Saved successfully!</h2>
-        <p class="success-sub">Your seating layout has been saved.</p>
-        <button class="success-ok-btn" onclick="closeSuccess()">Done</button>
-    </div>
-</div>
-
-<!-- ─── TOOLTIPS ─── -->
-<div id="seatTooltip"></div>
-<div id="rowTooltip"></div>
-<div class="rotation-tooltip" id="rotationTooltip"></div>
-
-
-<!-- Ticket Type Selection Popup -->
-<div id="ticketTypePopup" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10001; display: none; justify-content: center; align-items: center;">
-    <div style="background: white; border-radius: 12px; padding: 24px; max-width: 400px; width: 90%; box-shadow: 0 10px 40px rgba(0,0,0,0.2);">
-        <h3 style="margin-top: 0; color: #333;" id="ticketPopupTitle">Select Ticket Type</h3>
-        <p style="color: #666; margin-bottom: 20px;" id="ticketPopupSeat">Seat: </p>
-        <div id="ticketTypeList" style="margin-bottom: 20px;">
-            <!-- Ticket types will be dynamically added here -->
-        </div>
-        <div style="display: flex; gap: 10px; justify-content: flex-end;">
-            <button id="cancelTicketBtn" style="padding: 8px 20px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">Cancel</button>
-        </div>
-    </div>
-</div>
-
-
-
-<div id="seatAdjustmentPopup" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5);">
-    <div class="modal-content" style="background-color: #fefefe; margin: 15% auto; border: 1px solid #888; width: 300px; border-radius: 8px;">
-        @* <span class="close" onclick="closeSeatPopup()" style="float: right; font-size: 28px; font-weight: bold; cursor: pointer;">&times;</span> *@
-        @* <h3 id="popupTitle" style="margin-top: 20px;"></h3> *@
-        <div id="popupContent">
-            <p id="categoryInfo" style="margin: 10px 10px;"></p><hr />
-            <div style="display: flex; align-items: center; justify-content: center; gap: 20px; margin: 10px 10px;">
-                <button id="decreaseSeats" class="btn btn-secondary" style="width: 40px; height: 40px; border-radius: 50%; font-size: 20px; padding: 0;"><i class="fa-solid fa-minus"></i></button>
-                <span id="seatCount" style="font-size: 24px; font-weight: bold; min-width: 40px; text-align: center;">0</span>
-                <button id="increaseSeats" class="btn btn-primary" style="width: 40px; height: 40px; border-radius: 50%; font-size: 20px; padding: 0;"><i class="fa-solid fa-plus"></i></button>
-            </div>
-            @* <div id="maxSeatsMsg" style="color: #666; font-size: 12px; margin-top: 10px;"></div> *@
-            <div style="margin-top: 30px;margin-bottom:10px; text-align: center;">
-                <button id="cancelbtn" class="btn btn-secondary" style="margin-left: 10px; padding: 5px 10px;">Cancel</button>
-                <button id="addSeatsBtn" class="btn btn-primary" style="padding: 5px 10px;margin-left:10px;">Confirm</button>
-            </div>
-        </div>
-    </div>
-</div>
 @code {
     [Parameter]
     public string ChartID { get; set; } = "0";
-    public static dynamic CategoryList { get; set; } = new List<string>();
-    public static string ChartId { get; set; } = "0";
-    public static string ChartCat { get; set; } = "";
-    public string RowLabel { get; set; } = "";
-    public string SeatLabel { get; set; } = "";
-    string activeTool = "";
-    public int SeatingCapacity { get; set; } = 100;
-    public string lbl { get; set; } = "";
-    public string SeatDirection { get; set; } = "LTR";
-    public string SeatCount { get; set; } = "0";
-    public Boolean ShowCustomInput { get; set; } = false;
-    public Boolean ShowCustomRow { get; set; } = false;
-    public string CustomSeatLabel { get; set; } = "";
-    public string CustomRowLabel { get; set; } = "";
-    public static string ChartTitle { get; set; } = "Untitled Chart";
+
+    private IJSObjectReference module;
+    private string UserId = "0";
+    private string UserEmail = "";
+    private string ChartTitle = "Untitled chart";
+    private string ChartJson = "";
+    private bool _rendered;
+    private bool _busy;
     public static string ChartKey { get; set; } = "";
     public static string EventKey { get; set; } = "";
-    public static string SavedChart { get; set; } = "0";
-    public static Index Instance;
-    public static string UserId { get; set; } = "0";
-    private DotNetObjectReference<Index> objRef;
-    public string UserEmail { get; set; } = "";
-    string UserInitial => !string.IsNullOrWhiteSpace(UserEmail) ? UserEmail.Substring(0, 1).ToUpper() : "?";
-    private bool dropdownVisible = false;
-    public static string Type { get; set; } = "New";
-    public static string NewChartName { get; set; } = "";
 
-    protected override async Task OnInitializedAsync()
-    {
-        objRef = DotNetObjectReference.Create(this);
-        Instance = this;
-        if (ChartID == "0")
-        {
-            ChartTitle = "Untitled Chart";
-            CategoryList = new List<string>();
-        }
-        var user_id = await sessionStorage.GetAsync<string>("UserId");
-        var result = await sessionStorage.GetAsync<string>("UserEmail");
-
-        if (result.Success)
-        {
-            UserEmail = result.Value;
-        }
-        UserId = user_id.Value ?? "0";
-        GetChartCategory();
-        ChartId = ChartID;
-    }
+    // The editor DOM is owned by chart-editor.js, so Blazor must not diff it again after the first render.
+    protected override bool ShouldRender() => !_rendered;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender)
+        if (!firstRender) return;
+        _rendered = true;
+
+        var email = await Session.GetAsync<string>("UserEmail");
+        var uid = await Session.GetAsync<string>("UserId");
+        UserEmail = email.Success ? email.Value : "";
+        UserId = uid.Success ? uid.Value : "0";
+        if (string.IsNullOrEmpty(UserId) || UserId == "0")
         {
-            await JS.InvokeVoidAsync("setDotNetReference", objRef);
-            await JS.InvokeVoidAsync("fabricInterop.initCanvas", "seatCanvas");
-            await LoadLayout();
-            await JS.InvokeVoidAsync("setupOutsideClick", objRef);
+            NavManager.NavigateTo("/");
+            return;
+        }
+
+        if (!LoadChart())
+        {
+            NavManager.NavigateTo("home");
+            return;
+        }
+
+        module = await JS.InvokeAsync<IJSObjectReference>("import", "./Script/chart-editor.js");
+        await module.InvokeVoidAsync("init", new
+        {
+            title = ChartTitle,
+            chartJson = ChartJson,
+            email = UserEmail,
+            initial = string.IsNullOrEmpty(UserEmail) ? "?" : UserEmail.Substring(0, 1),
+            demo = false          // true = start a new chart with the sample stage / rows / table
+        });
+    }
+
+    // chart_id 0 = new chart. Existing charts must belong to the logged in user.
+    private bool LoadChart()
+    {
+        if (ChartID == "0") return true;
+        if (!int.TryParse(ChartID, out int id) || id <= 0) return false;
+
+        cdlChart objchart = new cdlChart();
+        DataSet ds = new DataSet();
+        NameValueCollection vncParams = new NameValueCollection();
+        vncParams.Add("chart_id", id.ToString());
+        vncParams.Add("log_id", "0");
+        vncParams.Add("chart_key", "");
+        vncParams.Add("option", "");
+        objchart.GetChartCategory(vncParams, ref ds);
+        if (ds == null || ds.Tables.Count == 0 || ds.Tables[0].Rows.Count == 0) return false;
+
+        DataRow dr = ds.Tables[0].Rows[0];
+        if (dr["created_by"] != DBNull.Value && dr["created_by"].ToString() != UserId) return false;
+
+        ChartTitle = dr["chart_title"].ToString();
+        ChartJson = dr["chart_json"].ToString();
+        ChartKey = dr["chart_key"].ToString();
+        EventKey = dr["event_key"].ToString();
+        return true;
+    }
+
+    private async Task SaveChart()
+    {
+        if (module == null || _busy) return;
+        if (!await module.InvokeAsync<bool>("validate")) return;   // chart name is required
+        _busy = true;
+        try
+        {
+            ChartPayload d = await module.InvokeAsync<ChartPayload>("getData");
+            int id = Persist(d, ChartID, d.Title);
+            await module.InvokeVoidAsync("markSaved");
+            await Session.SetAsync("FlashMessage", $"Layout saved ({d.SeatCount} seats)");
+            NavManager.NavigateTo("home");
+           
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Save chart failed: {ex}");
+            await module.InvokeVoidAsync("toast", "Save failed - " + ex.Message);
+        }
+        finally
+        {
+            _busy = false;
         }
     }
 
-    private async Task SetSelectMode()
+    private async Task CopyChart()
     {
-        activeTool = "select";
-        await JS.InvokeVoidAsync("fabricInterop.enableSelectMode", "seatCanvas");
-    }
-
-    private async Task SetCreateMode()
-    {
-        activeTool = "row";
-        await JS.InvokeVoidAsync("fabricInterop.enableRowCreateMode", "seatCanvas");
-    }
-
-    private async Task CreateMultipleRow()
-    {
-        activeTool = "multiplerow";
-        await JS.InvokeVoidAsync("fabricInterop.enableMultipleRowMode", "seatCanvas", "horizontal");
-    }
-
-    private async Task CreateSegmentRow()
-    {
-        activeTool = "segment";
-        await JS.InvokeVoidAsync("fabricInterop.enableSegmentRowMode", "seatCanvas");
-    }
-
-    private async Task DrawRect()
-    {
-        activeTool = "rectangle";
-        await JS.InvokeVoidAsync("fabricInterop.enableRectangleMode", "seatCanvas");
-    }
-
-    private async Task ZoomInClick()
-    {
-        await JS.InvokeVoidAsync("zoomIn");
-    }
-
-    private async Task CreateGeneralCategory()
-    {
-        activeTool = "general";
-        await JS.InvokeVoidAsync("fabricInterop.enableGeneralCategoryMode", "seatCanvas");
-    }
-
-    private async Task Deleteseats()
-    {
-        activeTool = "delete";
-        await JS.InvokeVoidAsync("fabricInterop.deleteSelected", "seatCanvas");
-    }
-
-    private async Task ApplyLabel()
-    {
-        if (RowLabel != "" || lbl != "")
-            await JS.InvokeVoidAsync("fabricInterop.applyRowLabel", "seatCanvas");
-        if (SeatLabel != "")
-            await JS.InvokeVoidAsync("fabricInterop.applySeatLabels", "seatCanvas");
-        if (SeatCount != "0")
-            await JS.InvokeVoidAsync("fabricInterop.adjustRowSeats", "seatCanvas");
-    }
-
-    public async void CustomizeClick()
-    {
-        await JS.InvokeVoidAsync("initCustomizeButton");
-    }
-
-    public async void OpenCatModal()
-    {
-        await JS.InvokeVoidAsync("OpenModal", "savealert");
-    }
-
-    public async void AddCateory()
-    {
-        await JS.InvokeVoidAsync("CreateCategoryTextbox");
-    }
-
-    // public async void OkClick()
-    // {
-    //     await JS.InvokeVoidAsync("GetCatname");
-    //     await JS.InvokeVoidAsync("clearNewCategoryRows");
-    // }
-    public async Task OkClick()
-    {
-        bool isValid = await JS.InvokeAsync<bool>("GetCatname");
-
-        if (isValid)
+        if (module == null || _busy) return;
+        if (!await module.InvokeAsync<bool>("validate")) return;   // chart name is required
+        _busy = true;
+        try
         {
-            await JS.InvokeVoidAsync("clearNewCategoryRows");
-            await JS.InvokeVoidAsync("closeCategoryModal");
+            ChartPayload d = await module.InvokeAsync<ChartPayload>("getData");
+            int id = Persist(d, "0", d.Title + " (copy)");
+            await Session.SetAsync("FlashMessage", "Chart copied");
+            NavManager.NavigateTo("home");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Copy chart failed: {ex}");
+            await module.InvokeVoidAsync("toast", "Copy failed - " + ex.Message);
+        }
+        finally
+        {
+            _busy = false;
         }
     }
-    private async Task SaveLayout()
-    {
-        await JS.InvokeVoidAsync("fabricInterop.saveLayout", "seatCanvas");
-    }
 
-    private async Task CancelClick()
+    private async Task CancelChart()
     {
+        if (module != null && !await module.InvokeAsync<bool>("canLeave")) return;
         NavManager.NavigateTo("home");
-    }
-
-    [JSInvokable]
-    public async Task SaveCategory(string cat)
-    {
-        if (ChartId != "0")
-        {
-            cdlChart objChart = new cdlChart();
-            NameValueCollection vncParams = new NameValueCollection();
-            vncParams.Add("chart_id", ChartId);
-            vncParams.Add("cat_name", cat);
-            objChart.UpdateCategory(vncParams);
-        }
-        else
-        {
-            var test = JsonConvert.DeserializeObject<List<CategoryModel>>(cat);
-            await sessionStorage.SetAsync("categories", test);
-            var result = await sessionStorage.GetAsync<List<CategoryModel>>("categories");
-            if (result.Success)
-                CategoryList = result.Value;
-            ChartCat = cat;
-        }
-        Instance?.InvokeAsync(() => Instance.StateHasChanged());
-    }
-
-    public void GetChartCategory()
-    {
-        cdlChart objChart = new cdlChart();
-        NameValueCollection vncParams = new NameValueCollection();
-        DataSet ds = new DataSet();
-        vncParams.Add("chart_id", ChartID);
-        vncParams.Add("log_id", "0");
-        vncParams.Add("chart_key", "");
-        vncParams.Add("option", "");
-        objChart.GetChartCategory(vncParams, ref ds);
-        if (ds != null && ds.Tables[0].Rows.Count > 0)
-        {
-            DataRow dr = ds.Tables[0].Rows[0];
-            ChartId = dr["chart_id"].ToString();
-            ChartTitle = dr["chart_title"].ToString();
-            ChartKey = dr["chart_key"].ToString();
-            EventKey = dr["event_key"].ToString();
-            ChartCat = dr["cat_name"].ToString();
-            CategoryList = JsonConvert.DeserializeObject<dynamic>(dr["cat_name"].ToString());
-        }
-    }
-
-    public async void EditCat()
-    {
-        await JS.InvokeVoidAsync("editCategoryName");
-    }
-
-    [JSInvokable]
-    public static Task SaveSeatingLayout(string json, string type,string name)
-    {
-        Type = type;
-        NewChartName = name;
-        File.WriteAllText("layout.json", json);
-        var data = JsonConvert.DeserializeObject<CanvasLayout>(json);
-        SaveLayoutToDatabase(data);
-        return Task.CompletedTask;
-    }
-
-    public class CanvasLayout
-    {
-        public string version { get; set; }
-        public CanvasObject[] objects { get; set; }
-    }
-
-    public class CanvasObject
-    {
-        public string type { get; set; }
-        public double left { get; set; }
-        public double top { get; set; }
-        public double width { get; set; }
-        public double height { get; set; }
-        public string fill { get; set; }
-        public string stroke { get; set; }
-        public string id { get; set; }
-        public string seatLabel { get; set; }
-        public string categoryId { get; set; }
-        public string seatType { get; set; }
-        public string seatId { get; set; }
-        public string rowLabel { get; set; }
-        public Boolean isRowLabel { get; set; }
-        public string seatStatus { get; set; }
-        public string rectangleId { get; set; }
-        public string rectangleLabel { get; set; }
-        public string rectangleIcon { get; set; }
-        public string createdBy { get; set; }
-        public string objectType { get; set; }
-        public string holdToken { get; set; }
-        public string categoryName { get; set; }
-        public int capacity { get; set; }
-        public string generalLabel { get; set; }
-        public string seatLabelFormat { get; set; }
-        public string customLabelStart { get; set; }
-        public string rowLabelFormat { get; set; }
-        public string rowLabelCustomStart { get; set; }
-    }
-
-    public async static void SaveLayoutToDatabase(CanvasLayout layout)
-    {
-        try
-        {
-            if(Type == "Copy")
-            {
-                ChartId = "0";
-            }
-            string json = JsonConvert.SerializeObject(layout);
-            SaveChartJson(json);
-            if (ChartId == "0")
-                SaveSeats(json);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine(ex.Message);
-        }
-    }
-
-    public static void SaveChartJson(string chartlayout)
-    {
-        cdlChart objChart = new cdlChart();
-        NameValueCollection vncParams = new NameValueCollection();
-        DataSet ds = new DataSet();
-        vncParams.Add("chart_id", ChartId);
-        if (Type == "New")
-        {
-            vncParams.Add("chart_title", ChartTitle);
-        }
-        else
-        {
-            vncParams.Add("chart_title", NewChartName);
-        }
-        if (ChartId == "0")
-        {
-            ChartKey = Guid.NewGuid().ToString();
-            EventKey = Guid.NewGuid().ToString();
-            vncParams.Add("chart_key", ChartKey);
-            vncParams.Add("event_key", EventKey);
-        }
-        else
-        {
-            vncParams.Add("chart_key", ChartKey);
-            vncParams.Add("event_key", EventKey);
-        }
-        vncParams.Add("chart_json", chartlayout);
-        vncParams.Add("cat_name", ChartCat);
-        vncParams.Add("rec_stat", "A");
-
-        Int64 chartid = 0;
-        if (ChartId == "0")
-        {
-            objChart.Add(vncParams, ref chartid, Convert.ToInt32(UserId));
-            SavedChart = chartid.ToString();
-        }
-        else
-        {
-            objChart.Change(vncParams, ref chartid, Convert.ToInt32(UserId));
-            SavedChart = chartid.ToString();
-        }
-    }
-
-    public async static void SaveSeats(string chartlayout)
-    {
-        try
-        {
-            var items = JsonConvert.DeserializeObject<CanvasLayout>(chartlayout);
-            var seats = items.objects
-                .Where(o => o.type == "group" && !string.IsNullOrEmpty(o.seatId))
-                .ToList();
-
-            cdlSeat objSeat = new cdlSeat();
-            foreach (var seat in seats)
-            {
-                NameValueCollection vncParams = new NameValueCollection();
-                vncParams.Add("chart_id", SavedChart);
-                vncParams.Add("row_name", seat.rowLabel);
-                vncParams.Add("seat_name", seat.seatId);
-                vncParams.Add("cat_name", seat.categoryName);
-                vncParams.Add("status", seat.seatStatus);
-                vncParams.Add("hold_token", "");
-                objSeat.Add(vncParams);
-            }
-
-
-            var gaAreas = items.objects
-           .Where(o => o.objectType == "genrectangle" && !string.IsNullOrEmpty(o.rectangleId))
-           .ToList();
-            if (gaAreas.Count > 0){
-                foreach (var gaArea in gaAreas)
-                {
-                    int capacity = gaArea.capacity > 0 ? gaArea.capacity : 0;
-                    string categoryName = gaArea.categoryName ?? "General";
-                    string rectangleId = gaArea.rectangleId ?? Guid.NewGuid().ToString();
-
-                    // Create individual seat records for GA area based on capacity
-                    for (int i = 1; i <= capacity; i++)
-                    {
-                        NameValueCollection vncParams = new NameValueCollection();
-                        vncParams.Add("chart_id", SavedChart);
-                        vncParams.Add("row_name", $"GA-{gaArea.generalLabel ?? "Area"}");
-                        vncParams.Add("seat_name", $"{gaArea.generalLabel ?? "GA"}-{i:000}");
-                        vncParams.Add("cat_name", categoryName);
-                        vncParams.Add("status", "available");
-                        vncParams.Add("hold_token", "");
-                        // vncParams.Add("seat_type", "ga");
-                        // vncParams.Add("rectangle_id", rectangleId);
-                        // vncParams.Add("seat_number", i.ToString());
-                        objSeat.Add(vncParams);
-                    }
-                }
-            }
-        }
-       
-        catch (Exception ex)
-        {
-            Console.WriteLine(ex.Message);
-        }
-    }
-
-    private async Task LoadLayout()
-    {
-        string json = GetSeatingLayout();
-        if (!string.IsNullOrWhiteSpace(json))
-            await JS.InvokeVoidAsync("fabricInterop.loadLayout", "seatCanvas", json);
-    }
-
-    public string GetSeatingLayout()
-    {
-        cdlChart objChart = new cdlChart();
-        NameValueCollection vncParams = new NameValueCollection();
-        DataSet ds = new DataSet();
-        vncParams.Add("chart_id", ChartID);
-        vncParams.Add("log_id", "0");
-        vncParams.Add("chart_key", "");
-        vncParams.Add("option", "");
-        objChart.GetChartCategory(vncParams, ref ds);
-        if (ds != null && ds.Tables[0].Rows.Count > 0)
-        {
-            DataRow dr = ds.Tables[0].Rows[0];
-            return dr["chart_json"].ToString();
-        }
-        return "";
-    }
-
-    void Undo() => JS.InvokeVoidAsync("undo");
-    void Redo() => JS.InvokeVoidAsync("redo");
-    void ZoomOutClick() => JS.InvokeVoidAsync("zoomOut");
-    void ResetView() => JS.InvokeVoidAsync("resetZoom");
-
-    public async Task ddlseat_Click(ChangeEventArgs e)
-    {
-        if (e.Value.ToString() != "0")
-        {
-            SeatLabel = e.Value.ToString();
-            ShowCustomInput = e.Value.ToString() == "custom";
-        }
-    }
-
-    public async Task ddlrow_Click(ChangeEventArgs e)
-    {
-        if (e.Value.ToString() != "0")
-        {
-            RowLabel = e.Value.ToString();
-            ShowCustomRow = e.Value.ToString() == "custom";
-        }
-    }
-
-    private void ToggleDropdown()
-    {
-        dropdownVisible = !dropdownVisible;
-    }
-
-    [JSInvokable]
-    public void CloseDropdown()
-    {
-        if (dropdownVisible)
-        {
-            dropdownVisible = false;
-            StateHasChanged();
-        }
     }
 
     private async Task Logout()
     {
-        dropdownVisible = false;
-        await sessionStorage.SetAsync("UserId", "0");
-        // NavManager.NavigateTo("/");
-        NavManager.NavigateTo(NavManager.BaseUri, true);
+        if (module != null && !await module.InvokeAsync<bool>("canLeave")) return;
+        await Session.DeleteAsync("UserEmail");
+        await Session.DeleteAsync("UserId");
+        NavManager.NavigateTo("/");
     }
 
-
-    public class CategoryModel
+    private int Persist(ChartPayload d, string chartId, string title)
     {
-        public string category { get; set; }
-        public string color { get; set; }
+        if (title.Length > 100) title = title.Substring(0, 100);   // eventchart.chart_title is varchar(100)
+        NameValueCollection p = new NameValueCollection();
+        p.Add("chart_id", chartId);
+        p.Add("chart_title", title);
+        p.Add("chart_json", d.ChartJson);
+        p.Add("cat_name", d.CatName);
+        p.Add("seats_json", d.SeatsJson);
+        p.Add("chart_key", ChartKey);
+        p.Add("event_key", EventKey);
+        p.Add("log_id", UserId);
+        return new cdlChart().SaveChart(p);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (module == null) return;
+        try
+        {
+            await module.InvokeVoidAsync("dispose");
+            await module.DisposeAsync();
+        }
+        catch (JSDisconnectedException) { }
+    }
+
+    public class ChartPayload
+    {
+        public string Title { get; set; } = "";
+        public string ChartJson { get; set; } = "";
+        public string CatName { get; set; } = "";
+        public string SeatsJson { get; set; } = "[]";
+        public int SeatCount { get; set; }
     }
 }

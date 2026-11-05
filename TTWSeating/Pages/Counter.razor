@@ -7,14 +7,15 @@
 @layout SeatingLayout
 <div style="position: absolute; top: 20px; right: 20px; z-index: 100; background: white; padding: 8px 12px; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.15);">
     <label style="margin-right: 16px;">
-        <input id="chkrow"  type="checkbox"  @onchange="ToggleRowLabel"/> Show Row Label
+        <input id="chkrow" type="checkbox" checked @onchange="ToggleRowLabel"/> Show Row Label
     </label>
     <label>
-        <input id="chkseat"  type="checkbox"  @onchange="ToggleSeatLabel"/> Show Seat Label
+        <input id="chkseat" type="checkbox" checked @onchange="ToggleSeatLabel"/> Show Seat Label
     </label>
 </div>
-<div id="chart-container"></div>
-        <canvas id="userCanvas" width="2000" height="800"></canvas>
+<div id="chart-container" style="width: 100%; min-height: 800px; position: relative;">
+    <div id="chartPreviewSvgHost" style="width:100%; min-height:800px;"></div>
+</div>
    
 @* <div class="row" style="padding:20px;text-align:center;">
     <div class="col-sm-6">
@@ -64,10 +65,48 @@
     {
         if (firstRender)
         {
-            string json = GetSeatingLayout();
-            string seats = JsonConvert.SerializeObject(getSeats());
-            await JS.InvokeVoidAsync("loadUserChart", json,seats,ChartId);
-            //await JS.InvokeVoidAsync("RenderChart");
+            try
+            {
+                await JS.InvokeVoidAsync("chartPreviewRenderer.showLoader", "chartPreviewSvgHost");
+                // 1. Fetch layout JSON first & populate ChartId
+                string json = GetSeatingLayout();
+
+                if (!string.IsNullOrEmpty(json) && !string.IsNullOrEmpty(ChartId) && ChartId != "0")
+                {
+                    // 2. Fetch seats data using valid ChartId
+                    DataSet seatsDs = getSeats();
+                    var seatList = new List<object>();
+                    if (seatsDs != null && seatsDs.Tables.Count > 0)
+                    {
+                        foreach (DataRow row in seatsDs.Tables[0].Rows)
+                        {
+                            seatList.Add(new
+                            {
+                                chart_id = row["chart_id"] ?? 0,
+                                seat_name = row["seat_name"]?.ToString(),
+                                row_name = row["row_name"]?.ToString(),
+                                cat_name = row["cat_name"]?.ToString(),
+                                status = row["status"]?.ToString(),
+                                hold_token = row["hold_token"]?.ToString()
+                            });
+                        }
+                    }
+                    string seatsJson = JsonConvert.SerializeObject(seatList);
+
+                    // 3. Invoke JS to render
+                    await JS.InvokeVoidAsync("chartPreviewRenderer.render", "chartPreviewSvgHost", json, seatsJson);
+                }
+                else
+                {
+                    Console.WriteLine($"No chart layout found for ChartKey: {ChartKey}");
+                    await JS.InvokeVoidAsync("chartPreviewRenderer.hideLoader", "chartPreviewSvgHost");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error loading user chart: {ex.Message}");
+                try { await JS.InvokeVoidAsync("chartPreviewRenderer.hideLoader", "chartPreviewSvgHost"); } catch { }
+            }
         }
     }
     private async Task LoadLayout()
@@ -76,11 +115,11 @@
 
         if (!string.IsNullOrWhiteSpace(json))
         {
-            await JS.InvokeVoidAsync("fabricInterop.loadLayout", "userCanvas", json);
+            await JS.InvokeVoidAsync("chartPreviewRenderer.render", "chartPreviewSvgHost", json, "[]");
         }
-        await JS.InvokeVoidAsync("fabricInterop.debugCanvas", "userCanvas");
+        // SVG preview does not use the Fabric.js canvas.
     }
-    public string GetSeatingLayout()
+   public string GetSeatingLayout()
     {
         cdlChart objChart = new cdlChart();
         NameValueCollection vncParams = new NameValueCollection();
@@ -90,14 +129,12 @@
         vncParams.Add("chart_key", ChartKey);
         vncParams.Add("option", "C");
         objChart.GetChartCategory(vncParams, ref ds);
-        if (ds != null)
+
+        if (ds != null && ds.Tables.Count > 0 && ds.Tables[0].Rows.Count > 0)
         {
-            if (ds.Tables[0].Rows.Count > 0)
-            {
-                DataRow dr = ds.Tables[0].Rows[0];
-                ChartId = dr["chart_id"].ToString();
-                return dr["chart_json"].ToString();
-            }
+            DataRow dr = ds.Tables[0].Rows[0];
+            ChartId = dr["chart_id"].ToString();
+            return dr["chart_json"]?.ToString() ?? "";
         }
         return "";
     }
@@ -147,29 +184,27 @@
     }
     public DataSet getSeats()
     {
+        if (string.IsNullOrEmpty(ChartId) || ChartId == "0") return null;
+
         cdlSeat objSeat = new cdlSeat();
         NameValueCollection vncParams = new NameValueCollection();
         DataSet ds = new DataSet();
-        vncParams.Add("chart_id",ChartId);
+        vncParams.Add("chart_id", ChartId);
         vncParams.Add("seat_name", "0");
         vncParams.Add("row_name", "0");
         vncParams.Add("cat_name", "");
         vncParams.Add("option", "C");
         objSeat.Getseats(vncParams, ref ds);
-        if(ds != null)
-        {
-            return ds;
-        }
-        return null;
+        return ds;
     }
     private async Task ToggleRowLabel()
     {
-        await JS.InvokeVoidAsync("fabricInterop.toggleRowLabels", "userCanvas");
+        await JS.InvokeVoidAsync("chartPreviewRenderer.toggleRowLabels");
     }
 
     private async Task ToggleSeatLabel()
     {
-        await JS.InvokeVoidAsync("fabricInterop.toggleSeatLabels", "userCanvas");
+        await JS.InvokeVoidAsync("chartPreviewRenderer.toggleSeatLabels");
     }
     public class SelectedSeat
     {

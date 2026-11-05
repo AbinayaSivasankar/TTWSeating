@@ -61,15 +61,19 @@ namespace DataLayer
 
             return 0;
         }
-        public int Updateseat(NameValueCollection vncParams)
+        public int UpdateSeat(NameValueCollection vncParams)
         {
-            SqlCommand sqlcmd = new SqlCommand("hq_seat_upd");
+            SqlCommand sqlcmd = new SqlCommand();
+            sqlcmd.CommandText = "hq_seat_upd";
             sqlcmd.Parameters.Add("@chart_id", SqlDbType.Int).Value = Convert.ToInt32(vncParams["chart_id"]);
             sqlcmd.Parameters.Add("@seat_name", SqlDbType.VarChar).Value = vncParams["seat_name"];
-            
+
             sqlcmd.Parameters.Add("@status", SqlDbType.VarChar).Value = (vncParams["status"]);
-            return cdlBase.ExecuteNonQuery(sqlcmd); ;
+            cdlBase.ExecuteNonQuery(sqlcmd);
+
+            return 0;
         }
+
         public int UpdateHoldToken(NameValueCollection vncParams)
         {
             SqlCommand sqlcmd = new SqlCommand("hq_update_hold_token");
@@ -88,6 +92,7 @@ namespace DataLayer
                 sqlcmd.Parameters.Add("@seat_name", SqlDbType.VarChar).Value = vncParams["seat_name"];
                 sqlcmd.Parameters.Add("@row_name", SqlDbType.VarChar).Value = vncParams["row_name"];
                 sqlcmd.Parameters.Add("@cat_name", SqlDbType.VarChar).Value = vncParams["cat_name"];
+
                 sqlcmd.Parameters.Add("@option", SqlDbType.Char).Value = vncParams["option"];
 
                 vdsOutput = cdlBase.ExecuteDataSet(sqlcmd);
@@ -97,6 +102,29 @@ namespace DataLayer
             {
                 throw ex;
             }
+        }
+        public int UpdateSeatStatus(NameValueCollection vncParams)
+        {
+            SqlCommand sqlcmd = new SqlCommand("hq_update_seat_status");
+            sqlcmd.Parameters.Add("@chart_id", SqlDbType.Int).Value = Convert.ToInt32(vncParams["chart_id"]);
+            sqlcmd.Parameters.Add("@seat_name", SqlDbType.VarChar).Value = vncParams["seat_name"];
+            sqlcmd.Parameters.Add("@hold_token", SqlDbType.VarChar).Value = vncParams["hold_token"];
+            sqlcmd.Parameters.Add("@status", SqlDbType.VarChar).Value = (vncParams["status"]);
+            return cdlBase.ExecuteNonQuery(sqlcmd); ;
+        }
+
+        /// <summary>
+        /// Syncs the seat table with the seats drawn in the editor (hq_seat_sync).
+        /// Runs inside the caller's transaction so the chart and its seats are saved together.
+        /// vncParams: chart_id, seats_json  ([{"row":"A","seat":"A-1","cat":"VIP"}, ...])
+        /// </summary>
+        public int SyncSeats(NameValueCollection vncParams, SqlConnection sqlcon, SqlTransaction sqltrx)
+        {
+            SqlCommand sqlcmd = new SqlCommand("hq_seat_sync");
+            sqlcmd.CommandTimeout = 120;
+            sqlcmd.Parameters.Add("@chart_id", SqlDbType.Int).Value = Convert.ToInt32(vncParams["chart_id"]);
+            sqlcmd.Parameters.Add("@seats_json", SqlDbType.NVarChar, -1).Value = vncParams["seats_json"] ?? "[]";
+            return cdlBase.ExecuteNonQuery(sqlcmd, sqlcon, sqltrx);
         }
     }
 }

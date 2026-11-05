@@ -77,5 +77,6 @@
     <None Include="Table\alter_script.sql" />
     <Build Include="StoredProcedures\hq_user_info_sel.sql" />
     <Build Include="StoredProcedures\hq_update_password.sql" />
+    <Build Include="StoredProcedures\hq_seat_sync.sql" />
   </ItemGroup>
 </Project>

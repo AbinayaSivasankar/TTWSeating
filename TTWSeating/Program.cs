@@ -7,11 +7,8 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddRazorPages();
-builder.Services.AddServerSideBlazor()
-    .AddHubOptions(o =>
-    {
-        o.MaximumReceiveMessageSize = 1024 * 1024 * 5; // 5MB
-    });
+builder.Services.AddServerSideBlazor(o => o.DetailedErrors = true)
+    .AddHubOptions(o => o.MaximumReceiveMessageSize = 1024 * 1024 * 5);
 
 builder.Services.AddSignalR(o =>
 {

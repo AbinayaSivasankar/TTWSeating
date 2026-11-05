@@ -1,46 +1,4 @@
-﻿@* @page "/chartdetails/{ChartId}"
-@using System.Collections.Specialized;
-@using System.Data;
-@using DataLayer;
-
-
-@code {
-    [Parameter]
-    public string ChartId { get; set; } = "0";
-    public string ChartName { get; set; } = "";
-    public string ChartKey { get; set; } = "";
-    public string EventKey { get; set; } = "";
-    protected override async void OnInitialized()
-    {
-        GetChartInfo(ChartId);
-    }
-    private void GetChartInfo(string chart_id)
-    {
-        cdlChart objchart = new cdlChart();
-        DataSet ds = new DataSet();
-        NameValueCollection vncParams = new NameValueCollection();
-        vncParams.Add("chart_id", chart_id);
-        vncParams.Add("log_id", "0");
-        vncParams.Add("chart_key", "");
-        vncParams.Add("option", "");
-        objchart.GetChartCategory(vncParams, ref ds);
-        if (ds != null && ds.Tables[0].Rows.Count > 0)
-        {
-            DataRow dr = ds.Tables[0].Rows[0];
-            ChartName = dr["chart_title"].ToString();
-            ChartKey = dr["chart_key"].ToString();
-        }
-        StateHasChanged();
-    }
-
-}
- *@
-
-
-
-
-
-@page "/chartdetails/{ChartId}"
+﻿@page "/chartdetails/{ChartId}"
 @using System.Collections.Specialized;
 @using System.Data;
 @using DataLayer;

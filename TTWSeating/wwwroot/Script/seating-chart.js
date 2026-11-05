@@ -1,57 +1,56 @@
 ﻿// seating-chart.js
 window.SeatingChart = class SeatingChart {
-    
-
+   
     constructor(containerId, chartId, secretkey, options = {}) {
+        debugger;
         this.containerId = containerId;
         this.chartId = chartId;
         this.secretKey = secretkey;
         this.options = options;
         this.canvasId = `canvas-${chartId}-${Date.now()}`;
-        //this.canvasId = containerId;
     }
 
     async render() {
         debugger;
         const container = document.getElementById(this.containerId);
-        // Get available width of the container/device
-        const deviceWidth = container.clientWidth || window.innerWidth;
+        if (!container) {
+            console.error(`Container element with ID '${this.containerId}' not found.`);
+            return;
+        }
 
-        // Set height as needed
-        const deviceHeight = window.innerHeight * 0.7;
-        container.innerHTML = `<canvas id="${this.canvasId}"  width="${deviceWidth}"
-                height="${deviceHeight}"></canvas>`;
+        // Get available width and height of the container/device
+        const deviceWidth = container.clientWidth || window.innerWidth;
+        const deviceHeight = window.innerHeight * 0.7; // Fixed multiplication
+
+        container.innerHTML = `<canvas id="${this.canvasId}" width="${deviceWidth}" height="${deviceHeight}"></canvas>`;
 
         try {
-            
-            const response = await fetch(`https://localhost:7203/api/chart?chartId=${this.chartId}&secretkey=${this.secretKey}`);
-            await fetch(`https://localhost:7203/api/chart/Updatestatus?chartId=${this.chartId}&secretkey=${this.secretKey}`, {
-                method: "POST"
-            });
-            const SeatDetails = await fetch(`https://localhost:7203/api/chart/SeatList?chartId=${this.chartId}`);
+            debugger;
+            //{ apiBase: "https://highqcare.com/seating_api/api/chart" } 
+            const baseUrl = this.options.apiBase || "http://localhost:5045/api/chart";
 
+            const [response, seatDetailsResponse] = await Promise.all([
+                fetch(`${baseUrl}?chartId=${this.chartId}&secretkey=${this.secretKey}`),
+                fetch(`${baseUrl}/SeatList?chartId=${this.chartId}`),
+                fetch(`${baseUrl}/Updatestatus?chartId=${this.chartId}&secretkey=${this.secretKey}`, {
+                    method: "POST"
+                })
+            ]);
 
-
-            //const response = await fetch(`http://dev.theticketworld.com/seating_api/api/chart?chartId=${this.chartId}&secretkey=${this.secretKey}`);
-            //await fetch(`http://dev.theticketworld.com/seating_api/api/chart/Updatestatus?chartId=${this.chartId}&secretkey=${this.secretKey}`, {
-            //    method: "POST"
-            //});
-            //const SeatDetails = await fetch(`http://dev.theticketworld.com/seating_api/api/chart/SeatList?chartId=${this.chartId}`);
-
-
-          
             const data = await response.json();
-            const seats = await SeatDetails.json();
-            
-            // window.fabricInterop.initCanvas(this.canvasId);
+            const seats = await seatDetailsResponse.json();
+
+            // Initialize Fabric Canvas
             window.fabricInterop.initCanvas(
                 this.canvasId,
                 deviceWidth,
                 deviceHeight
             );
-            window.fabricInterop.loadLayout(this.canvasId, data.chart_json);
-            
 
+            // Load JSON onto Canvas
+            window.fabricInterop.loadLayout(this.canvasId, data.chart_json);
+
+            // Enable Interactive User or Select Mode
             if (this.options.mode === 'user') {
                 window.fabricInterop.enableUserMode(this.canvasId, seats, this.chartId);
             } else {
@@ -60,15 +59,17 @@ window.SeatingChart = class SeatingChart {
 
             return this;
         } catch (error) {
-            console.error('Failed to load chart:', error);
+            console.error('Failed to load seating chart:', error);
         }
     }
 
+    // Same list the page receives in receiveSelectedSeatsFromBlazor: seats plus expanded general-admission tickets.
     getSelectedSeats() {
-        return window.fabricInterop.getSelectedItems(this.canvasId);
+        const canvas = window.fabricInterop.canvases[this.canvasId];
+        return canvas ? window.fabricInterop.getAllSelections(canvas) : [];
     }
 
     clearSelections() {
         window.fabricInterop.clearSelectedSeats(this.canvasId);
     }
-}
+};

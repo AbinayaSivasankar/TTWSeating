@@ -1,43 +1,43 @@
-﻿@page "/home"
+@page "/home"
 @using DataLayer;
 @using System.Collections.Specialized
 @using System.Data
 @using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
 
 <style>
-    /* ─── ROOT VARIABLES (Terracotta Theme) ─── */
     :root {
-        --bg-body: #f7f2eb;
-        --bg-surface: #fefcf8;
-        --bg-card: #ffffff;
-        --bg-elevated: #f5ede4;
-        --bg-hover: #f0e6da;
-        --bg-active: #e8d9c9;
-        --border-subtle: #e5d6c6;
-        --border-medium: #d4c0ab;
-        --border-strong: #bfa692;
-        --text-primary: #3a2c24;
-        --text-secondary: #6b5747;
-        --text-muted: #a48d7a;
-        --text-inverse: #ffffff;
-        --accent-1: #c9694b;
-        --accent-1-dark: #a84f34;
-        --accent-1-light: #e8a187;
-        --accent-1-glow: rgba(201, 105, 75, 0.20);
-        --accent-2: #d99b7a;
-        --accent-success: #6b8f71;
-        --accent-danger: #c05a4a;
+        --color-text-primary: var(--color-text);
+        --color-text-secondary: var(--color-text-muted);
+        --color-surface-hover: var(--color-primary-soft);
+        --bg-body: var(--color-bg);
+        --bg-surface: var(--color-surface);
+        --bg-card: var(--color-surface);
+        --bg-elevated: var(--color-bg);
+        --bg-hover: var(--color-primary-soft);
+        --bg-active: var(--color-primary-soft);
+        --border-subtle: var(--color-border);
+        --border-medium: var(--color-border);
+        --border-strong: var(--color-text-muted);
+        --text-primary: var(--color-text);
+        --text-secondary: var(--color-text-muted);
+        --text-muted: var(--color-text-muted);
+        --text-inverse: var(--color-on-primary);
+        --accent-1: var(--color-primary);
+        --accent-1-dark: var(--color-primary-hover);
+        --accent-1-light: var(--color-primary-soft);
+        --accent-1-glow: color-mix(in srgb, var(--color-primary) 20%, transparent);
+        --accent-2: var(--color-primary-hover);
+        --accent-success: var(--color-success);
+        --accent-danger: var(--color-danger);
         --radius-sm: 6px;
         --radius-md: 10px;
         --radius-lg: 16px;
         --radius-xl: 20px;
         --radius-full: 9999px;
-        --shadow-card: 0 2px 16px rgba(90, 60, 40, 0.06), 0 1px 3px rgba(90, 60, 40, 0.03);
-        --shadow-elevated: 0 8px 32px rgba(90, 60, 40, 0.08);
-        --shadow-glow: 0 0 30px rgba(201, 105, 75, 0.12);
+        --shadow-card: 0 1px 2px rgba(11, 27, 58, 0.06), 0 4px 12px rgba(11, 27, 58, 0.05);
+        --shadow-elevated: 0 8px 32px rgba(15, 23, 42, 0.12);
+        --shadow-glow: 0 0 30px color-mix(in srgb, var(--color-primary) 12%, transparent);
         --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         --transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
     }
@@ -89,15 +89,15 @@
 
     /* ─── GLOBAL ─── */
     body {
-        background: var(--bg-body);
-        font-family: var(--font);
-        color: var(--text-primary);
+        background: #F2F2F2;
+        color: #111;
+        font-family: "Segoe UI", Inter, system-ui, sans-serif;
         animation: fadeSlideIn 0.5s ease;
         margin: 0;
         padding: 0;
     }
 
-    /* ─── HEADER (with centered tabs) ─── */
+    /* ─── LEGACY HEADER ─── */
     .terracotta-header {
         background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
         color: white;
@@ -135,7 +135,6 @@
                 border-radius: var(--radius-md);
             }
 
-    /* Tabs - centered */
     .header-tabs {
         display: flex;
         gap: 4px;
@@ -192,7 +191,7 @@
         position: relative;
     }
 
-    /* ─── AVATAR DROPDOWN ─── */
+    /* ─── AVATAR WRAPPER ─── */
     .avatar-wrapper {
         position: relative;
         cursor: pointer;
@@ -304,7 +303,7 @@
                     font-size: 13px;
                 }
 
-    /* ─── DASHBOARD LAYOUT ─── */
+    /* ─── LEGACY DASHBOARD / ACTION BAR ─── */
     .terracotta-dashboard {
         max-width: 1400px;
         margin: 0 auto;
@@ -312,7 +311,6 @@
         animation: fadeSlideIn 0.6s ease;
     }
 
-    /* ─── TOP ACTION BAR ─── */
     .terracotta-action-bar {
         display: flex;
         justify-content: space-between;
@@ -390,7 +388,6 @@
                 font-size: 16px;
             }
 
-    /* ─── CHART LIST (full-width rows) ─── */
     .terracotta-list {
         display: flex;
         flex-direction: column;
@@ -398,7 +395,7 @@
         margin-bottom: 30px;
     }
 
-    /* ─── FULL-WIDTH CHART CARD ─── */
+    /* ─── BASE CHART CARD (still used via .terracotta-row-card) ─── */
     .terracotta-row-card {
         background: var(--bg-surface);
         border-radius: var(--radius-lg);
@@ -445,7 +442,6 @@
             box-shadow: 0 0 0 2px var(--accent-1-glow);
         }
 
-        /* ─── CHART PREVIEW CANVAS ─── */
         .terracotta-row-card .card-left {
             display: flex;
             align-items: center;
@@ -482,7 +478,6 @@
 
         .terracotta-row-card .chart-preview-container .preview-placeholder {
             font-size: 20px;
-            /* color: var(--text-muted); */
             color: #3c3834;
             opacity: 0.3;
             display: flex;
@@ -587,7 +582,7 @@
             opacity: 1;
         }
 
-    /* ─── DETAILS PANEL ─── */
+    /* ─── LEGACY DETAILS PANEL ─── */
     .terracotta-details-panel {
         background: var(--bg-surface);
         border-radius: var(--radius-xl);
@@ -658,7 +653,6 @@
                 color: var(--text-primary);
             }
 
-    /* ─── EMPTY STATE ─── */
     .terracotta-empty-state {
         text-align: center;
         padding: 60px 20px;
@@ -670,11 +664,9 @@
     }
 
         .terracotta-empty-state i {
-            /* font-size: 56px; */
             background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
-            /* margin-bottom: 16px; */
         }
 
         .terracotta-empty-state h4 {
@@ -686,7 +678,6 @@
             color: var(--text-muted);
         }
 
-    /* ─── SETTINGS TAB ─── */
     .terracotta-settings {
         max-width: 800px;
         margin: 20px auto;
@@ -788,7 +779,7 @@
         .terracotta-row-card .preview-link i {
             font-size: 14px;
         }
-    /* ─── RESPONSIVE ─── */
+
     @@media (max-width: 768px) {
         .terracotta-header {
             padding: 8px 12px;
@@ -882,227 +873,2600 @@
             min-width: 140px;
         }
     }
+
+    /* ═════════ SEATSQ PAGE (sq-*) ═════════ */
+    body {
+        background: #F2F2F2;
+        color: #111;
+        font-family: 'Instrument Sans', system-ui, sans-serif;
+    }
+
+    .sq-page, .sq-page *, .sq-page *::before, .sq-page *::after {
+        box-sizing: border-box;
+    }
+
+    .sq-page {
+        min-height: 100vh;
+        background: #F2F2F2;
+        color: #111;
+        font: 13.5px/1.4 "Segoe UI", Inter, system-ui, sans-serif;
+    }
+
+        .sq-page button, .sq-page input {
+            font: inherit;
+        }
+
+        .sq-page button {
+            cursor: pointer;
+        }
+
+    .sq-shell {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 24px;
+        padding: 10px;
+        min-height: 100vh;
+    }
+
+    .sq-content {
+        flex: 1 1 600px;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+    }
+
+    .sq-header {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .sq-search {
+        flex: 1 1 240px;
+        max-width: 420px;
+        margin-right: 8px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 16px;
+        height: 44px;
+        border-radius: 22px;
+        background: #FFF;
+        border: 1px solid transparent;
+        color: #777;
+    }
+
+        .sq-search:focus-within {
+            border-color: #7B1E3A;
+        }
+
+        .sq-search input {
+            flex: 1;
+            min-width: 0;
+            background: transparent;
+            border: 0;
+            outline: 0;
+            color: #111;
+            font-size: 13px;
+        }
+
+            .sq-search input::placeholder {
+                color: #8A8A8A;
+            }
+
+    .sq-btn-dark {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        height: 44px;
+        padding: 0 20px;
+        border: 0;
+        border-radius: 22px;
+        background: #7B1E3A;
+        color: #FFF;
+        font-weight: 600;
+        text-decoration: none;
+        white-space: nowrap;
+    }
+
+        .sq-btn-dark:hover {
+            background: #64172F;
+        }
+
+    .sq-avatar-wrap {
+        position: relative;
+        margin-left: auto;
+    }
+
+    .sq-avatar {
+        width: 40px;
+        height: 40px;
+        border: 0;
+        border-radius: 50%;
+        background: #7B1E3A;
+        color: #FFF;
+        font-weight: 700;
+    }
+
+    .sq-menu {
+        display: none;
+        position: absolute;
+        z-index: 20;
+        top: 48px;
+        right: 0;
+        min-width: 200px;
+        padding: 8px;
+        border-radius: 14px;
+        background: #FFF;
+        box-shadow: 0 8px 24px rgba(0,0,0,.16);
+    }
+
+        .sq-menu.show {
+            display: block;
+        }
+
+    .sq-menu-info {
+        padding: 10px;
+        color: #4A4A4A;
+        overflow-wrap: anywhere;
+    }
+
+    .sq-menu button {
+        width: 100%;
+        padding: 10px;
+        border: 0;
+        border-radius: 9px;
+        background: transparent;
+        color: #B42318;
+        text-align: left;
+    }
+
+        .sq-menu button:hover {
+            background: #FFF1F0;
+        }
+
+    .sq-main {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+    }
+
+    .sq-page-title {
+        margin: 0;
+        font-size: 23px;
+        font-weight: 700;
+        letter-spacing: -.03em;
+    }
+
+    .sq-page-subtitle {
+        margin: 5px 0 0;
+        color: #6B6B6B;
+        font-size: 13px;
+    }
+
+    .sq-section {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        padding: 22px;
+        border-radius: 14px;
+        background: #FFF;
+    }
+
+    .sq-section-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+    }
+
+    .sq-h2 {
+        margin: 0;
+        font-size: 17px;
+        font-weight: 600;
+    }
+
+    .sq-count {
+        color: #6B6B6B;
+        font-size: 12px;
+    }
+
+    .sq-chart-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+        gap: 14px;
+    }
+
+    .sq-chart-card.terracotta-row-card {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        padding: 14px;
+        border: 1px solid #EAEAEA;
+        border-radius: 18px;
+        background: #FFF;
+        box-shadow: 0 1px 4px rgba(0,0,0,.05);
+        cursor: pointer;
+        transition: transform .18s, box-shadow .18s, border-color .18s;
+    }
+
+        .sq-chart-card.terracotta-row-card:hover {
+            transform: translateY(-2px);
+            border-color: #7B1E3A;
+            box-shadow: 0 8px 22px rgba(0,0,0,.09);
+        }
+
+        .sq-chart-card.terracotta-row-card.active {
+            border-color: #7B1E3A;
+            box-shadow: 0 0 0 2px rgba(123,30,58,.12);
+        }
+
+    .sq-chart-top {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-width: 0;
+    }
+
+    .sq-thumb.chart-preview-container {
+        flex: 0 0 64px;
+        width: 64px;
+        height: 64px;
+        border: 0;
+        border-radius: 12px;
+        background: #F1F1F1;
+        overflow: hidden;
+    }
+
+    .sq-thumb canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+    }
+
+    .sq-thumb .preview-placeholder {
+        color: #8A8A8A;
+        font-size: 20px;
+    }
+
+    .sq-chart-info {
+        min-width: 0;
+        flex: 1;
+    }
+
+    .sq-chart-title {
+        overflow: hidden;
+        font-size: 14px;
+        font-weight: 600;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .sq-chart-id {
+        margin-top: 5px;
+        color: #6B6B6B;
+        font-size: 11px;
+    }
+
+    .sq-chart-key {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+        color: #777;
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 10px;
+    }
+
+        .sq-chart-key span {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+    .sq-icon-btn {
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 30px;
+        height: 30px;
+        border: 0;
+        border-radius: 50%;
+        background: #F5F5F5;
+        color: #4A4A4A;
+    }
+
+        .sq-icon-btn:hover {
+            background: #F5E9ED;
+            color: #7B1E3A;
+        }
+
+    .sq-chart-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        padding-top: 10px;
+        border-top: 1px solid #F0F0F0;
+    }
+
+    .sq-btn-out {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        height: 34px;
+        padding: 0 13px;
+        border: 1px solid #E0E0E0;
+        border-radius: 17px;
+        background: #FFF;
+        color: #333;
+        font-size: 12px;
+        font-weight: 600;
+        text-decoration: none;
+    }
+
+        .sq-btn-out:hover {
+            border-color: #7B1E3A;
+            color: #7B1E3A;
+        }
+
+    .sq-empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 9px;
+        padding: 50px 20px;
+        border-radius: 20px;
+        background: #FFF;
+        text-align: center;
+    }
+
+        .sq-empty svg {
+            color: #7B1E3A;
+        }
+
+        .sq-empty strong {
+            font-size: 15px;
+        }
+
+        .sq-empty span {
+            color: #6B6B6B;
+        }
+
+    .sq-settings {
+        max-width: 760px;
+    }
+
+    .sq-key-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 14px 16px;
+        border-radius: 16px;
+        background: #F5F5F5;
+    }
+
+    .sq-key-label {
+        flex: 0 0 120px;
+        font-weight: 600;
+    }
+
+    .sq-key-value {
+        flex: 1;
+        min-width: 0;
+        overflow-wrap: anywhere;
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 12px;
+    }
+
+    .sq-key-row .sq-icon-btn {
+        background: #FFF;
+    }
+
+    @@media (max-width: 900px) {
+        .sq-shell {
+            padding: 16px;
+        }
+    }
+
+    @@media (max-width: 560px) {
+        .sq-shell {
+            padding: 12px;
+        }
+
+        .sq-section {
+            padding: 16px;
+        }
+
+        .sq-search {
+            max-width: none;
+            margin-right: 0;
+        }
+
+        .sq-chart-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .sq-key-row {
+            flex-wrap: wrap;
+        }
+
+        .sq-key-label {
+            flex-basis: calc(100% - 44px);
+        }
+
+        .sq-key-value {
+            flex-basis: 100%;
+            order: 1;
+        }
+
+        .sq-key-row .sq-icon-btn {
+            margin-left: auto;
+        }
+    }
+
+    /* ─── layout pass 2 ─── */
+    .sq-shell {
+        display: grid;
+        grid-template-columns: 148px minmax(0, 1fr);
+        align-items: start;
+        gap: 16px;
+        padding: 10px;
+    }
+
+    .sq-content {
+        gap: 13px;
+    }
+
+    .sq-header {
+        min-height: 34px;
+        flex-wrap: nowrap;
+        gap: 9px;
+    }
+
+    .sq-header-title {
+        flex: 0 0 auto;
+        margin: 0 auto 0 0;
+        font-size: 21px;
+        font-weight: 600;
+        letter-spacing: -.03em;
+    }
+
+    .sq-search {
+        flex: 0 1 270px;
+        max-width: 270px;
+        height: 34px;
+        gap: 8px;
+        margin: 0;
+        padding: 0 12px;
+        border-radius: 18px;
+    }
+
+        .sq-search input {
+            font-size: 10px;
+        }
+
+    .sq-btn-dark.sq-create {
+        height: 34px;
+        padding: 0 16px;
+        border-radius: 18px;
+        font-size: 13.5px;
+        font-weight: 600;
+    }
+
+    .sq-header-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 34px;
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        background: #FFF;
+        color: #333;
+    }
+
+    .sq-avatar-wrap {
+        flex: 0 0 auto;
+        margin-left: 0;
+    }
+
+    .sq-avatar {
+        width: 34px;
+        height: 34px;
+        font-size: 11px;
+    }
+
+    .sq-menu {
+        top: 42px;
+    }
+
+    .sq-dashboard-body {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 228px;
+        align-items: start;
+        gap: 13px;
+    }
+
+    .sq-dashboard-main, .sq-dashboard-rail {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 13px;
+    }
+
+    .sq-section {
+        gap: 10px;
+        padding: 15px;
+        border-radius: 14px;
+    }
+
+    .sq-h2 {
+        font-size: 13px;
+    }
+
+    .sq-stats {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 3px;
+        padding: 3px;
+        border-radius: 18px;
+        background: #F1F1F1;
+    }
+
+    .sq-stat {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        padding: 12px 14px;
+        border-radius: 15px;
+    }
+
+        .sq-stat.first {
+            background: #FFF;
+            box-shadow: 0 1px 5px rgba(0,0,0,.08);
+        }
+
+    .sq-stat-label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 10px;
+        font-weight: 500;
+    }
+
+        .sq-stat-label svg {
+            width: 12px;
+            height: 12px;
+        }
+
+    .sq-stat-value {
+        font-size: 33px;
+        font-weight: 500;
+        letter-spacing: -.04em;
+        line-height: 1;
+    }
+
+    .sq-stat-note {
+        color: #777;
+        font-size: 9px;
+    }
+
+    .sq-section-head {
+        min-height: 30px;
+    }
+
+    .sq-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 7px;
+    }
+
+        .sq-toolbar .sq-h2 {
+            flex: 1 1 130px;
+        }
+
+            .sq-toolbar .sq-h2 small {
+                color: #6B6B6B;
+                font-size: 10px;
+                font-weight: 500;
+            }
+
+    .sq-select-wrap {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        height: 29px;
+        border: 1px solid #E5E5E5;
+        border-radius: 16px;
+        background: #FFF;
+    }
+
+        .sq-select-wrap select {
+            max-width: 116px;
+            height: 27px;
+            padding: 0 23px 0 11px;
+            border: 0;
+            border-radius: inherit;
+            appearance: none;
+            background: transparent;
+            color: #555;
+            font-size: 9px;
+        }
+
+        .sq-select-wrap svg {
+            position: absolute;
+            right: 8px;
+            pointer-events: none;
+        }
+
+    .sq-view-toggle {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        padding: 2px;
+        border-radius: 16px;
+        background: #F1F1F1;
+    }
+
+        .sq-view-toggle button {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 25px;
+            height: 25px;
+            padding: 0;
+            border: 0;
+            border-radius: 50%;
+            background: transparent;
+            color: #555;
+        }
+
+            .sq-view-toggle button.on {
+                background: #FFF;
+                box-shadow: 0 1px 3px rgba(0,0,0,.12);
+            }
+
+    .sq-chart-grid {
+        grid-template-columns: repeat(auto-fill, minmax(164px, 1fr));
+        gap: 9px;
+    }
+
+        .sq-chart-grid.list {
+            grid-template-columns: 1fr;
+        }
+
+            .sq-chart-grid.list .sq-chart-card {
+                flex-direction: row;
+                align-items: center;
+            }
+
+            .sq-chart-grid.list .sq-chart-top {
+                flex: 0 0 180px;
+            }
+
+            .sq-chart-grid.list .sq-thumb.chart-preview-container {
+                aspect-ratio: 240 / 150;
+            }
+
+            .sq-chart-grid.list .sq-chart-info {
+                flex: 1;
+            }
+
+    .sq-chart-card.terracotta-row-card {
+        align-items: stretch;
+        justify-content: flex-start;
+        gap: 10px;
+        padding: 12px;
+        border: 0;
+        border-radius: 26px;
+        background: #F4F4F4;
+        box-shadow: none;
+    }
+
+        .sq-chart-card.terracotta-row-card:hover {
+            border-color: transparent;
+            box-shadow: 0 5px 16px rgba(0,0,0,.09);
+        }
+
+        .sq-chart-card.terracotta-row-card.active {
+            box-shadow: 0 0 0 2px rgba(123,30,58,.15);
+        }
+
+    .sq-chart-top {
+        position: relative;
+        display: block;
+    }
+
+    .sq-thumb.chart-preview-container {
+        width: 100%;
+        height: auto;
+        aspect-ratio: 240 / 150;
+        border-radius: 13px;
+        background: #E5E5E5;
+    }
+
+    .sq-thumb canvas {
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: contain;
+    }
+
+    .sq-thumb .canvas-container {
+        width: 100% !important;
+        height: 100% !important;
+    }
+
+    .sq-chart-info {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        padding: 1px 3px 0;
+    }
+
+    .sq-chart-title-line {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
+        min-width: 0;
+    }
+
+    .sq-chart-title {
+        font-size: 10px;
+    }
+
+    .sq-chart-status {
+        flex: 0 0 auto;
+        padding: 2px 6px;
+        border-radius: 5px;
+        background: #E8E8E8;
+        color: #555;
+        font-size: 8px;
+        font-weight: 600;
+    }
+
+        .sq-chart-status.active {
+            background: #DFF4E6;
+            color: #167A3E;
+        }
+
+    .sq-chart-id {
+        margin: 0;
+        color: #777;
+        font-size: 8px;
+    }
+
+    .sq-chart-key {
+        gap: 4px;
+        font-size: 8px;
+    }
+
+        .sq-chart-key .sq-icon-btn {
+            width: 18px;
+            height: 18px;
+            background: transparent;
+        }
+
+    .sq-chart-actions {
+        gap: 5px;
+        padding: 0;
+        border: 0;
+    }
+
+        .sq-chart-actions .sq-btn-dark {
+            flex: 1;
+            height: 27px;
+            padding: 0 8px;
+            border-radius: 15px;
+            font-size: 9px;
+        }
+
+        .sq-chart-actions .sq-btn-out {
+            width: 27px;
+            height: 27px;
+            padding: 0;
+            border-radius: 50%;
+            font-size: 0;
+        }
+
+            .sq-chart-actions .sq-btn-out svg {
+                width: 12px;
+                height: 12px;
+            }
+
+    .sq-dashboard-rail .sq-section {
+        padding: 14px 12px 12px;
+        border-radius: 14px;
+    }
+
+    .sq-rail-title {
+        margin: 0 0 3px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    .sq-recent-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        min-width: 0;
+        padding: 5px 2px;
+        border: 0;
+        border-radius: 10px;
+        background: transparent;
+        color: inherit;
+        text-align: left;
+    }
+
+        .sq-recent-row:hover {
+            background: #F5F5F5;
+        }
+
+    .sq-recent-thumb {
+        flex: 0 0 34px;
+        width: 34px;
+        height: 34px;
+        overflow: hidden;
+        border-radius: 9px;
+        background: #E7E7E7;
+    }
+
+        .sq-recent-thumb svg {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+    .sq-recent-name {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        font-size: 9px;
+        font-weight: 600;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .sq-recent-id {
+        flex: 0 0 auto;
+        color: #666;
+        font-size: 8px;
+    }
+
+    .sq-rail-btn {
+        width: 100%;
+        height: 31px;
+        padding: 0 12px;
+        border-radius: 16px;
+        font-size: 9px;
+    }
+
+    .sq-tip {
+        display: flex;
+        gap: 9px;
+        padding: 12px;
+        border-radius: 18px;
+        background: #E3F6EA;
+    }
+
+    .sq-tip-body {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .sq-tip-title {
+        color: #0F5C2E;
+        font-size: 10px;
+        font-weight: 700;
+    }
+
+    .sq-tip-text {
+        color: #1F5A38;
+        font-size: 9px;
+        line-height: 1.4;
+    }
+
+    .sq-tip-close {
+        flex: 0 0 20px;
+        width: 20px;
+        height: 20px;
+        padding: 0;
+        border: 0;
+        border-radius: 50%;
+        background: rgba(255,255,255,.75);
+        color: #0F5C2E;
+    }
+
+    .sq-settings-page {
+        display: flex;
+        flex-direction: column;
+        gap: 13px;
+    }
+
+    @@media (max-width: 1050px) {
+        .sq-shell {
+            grid-template-columns: 132px minmax(0, 1fr);
+            gap: 12px;
+            padding: 14px;
+        }
+
+        .sq-dashboard-body {
+            grid-template-columns: minmax(0, 1fr) 210px;
+            gap: 10px;
+        }
+
+        .sq-chart-grid {
+            grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
+        }
+    }
+
+    @@media (max-width: 760px) {
+        .sq-shell {
+            display: flex;
+            flex-direction: column;
+            padding: 12px;
+        }
+
+        .sq-content {
+            width: 100%;
+        }
+
+        .sq-dashboard-body {
+            grid-template-columns: 1fr;
+        }
+
+        .sq-dashboard-rail {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+        }
+    }
+
+    @@media (max-width: 520px) {
+        .sq-header {
+            flex-wrap: wrap;
+        }
+
+        .sq-header-title {
+            flex: 1 1 100%;
+        }
+
+        .sq-search {
+            flex: 1 1 150px;
+        }
+
+        .sq-chart-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .sq-section {
+            padding: 12px;
+        }
+
+        .sq-stat {
+            padding: 10px 8px;
+        }
+
+        .sq-stat-value {
+            font-size: 27px;
+        }
+    }
+
+    /* ─── layout pass 3 (desktop sizing) ─── */
+    .sq-shell {
+        grid-template-columns: 180px minmax(0, 1fr);
+        gap: 22px;
+        padding: 10px;
+    }
+
+    .sq-content, .sq-dashboard-main, .sq-dashboard-rail {
+        gap: 18px;
+    }
+
+    .sq-header {
+        min-height: 44px;
+        gap: 12px;
+    }
+
+    .sq-header-title {
+        font-size: 26px;
+    }
+
+    .sq-search {
+        flex-basis: 340px;
+        max-width: 340px;
+        height: 44px;
+        padding: 0 16px;
+        border-radius: 24px;
+    }
+
+        .sq-search input {
+            font-size: 13px;
+        }
+
+    .sq-btn-dark.sq-create {
+        height: 44px;
+        padding: 0 20px;
+        border-radius: 24px;
+        font-size: 13.5px;
+    }
+
+    .sq-header-icon {
+        flex-basis: 42px;
+        width: 42px;
+        height: 42px;
+    }
+
+    .sq-avatar {
+        width: 42px;
+        height: 42px;
+        font-size: 13px;
+    }
+
+    .sq-dashboard-body {
+        grid-template-columns: minmax(0, 1fr) 260px;
+        gap: 18px;
+    }
+
+    .sq-section {
+        gap: 14px;
+        padding: 20px;
+        border-radius: 14px;
+    }
+
+    .sq-h2 {
+        font-size: 16px;
+    }
+
+    .sq-stats {
+        gap: 4px;
+        padding: 4px;
+        border-radius: 22px;
+    }
+
+    .sq-stat {
+        gap: 6px;
+        padding: 16px 18px;
+        border-radius: 18px;
+    }
+
+    .sq-stat-label {
+        gap: 8px;
+        font-size: 13px;
+    }
+
+        .sq-stat-label svg {
+            width: 16px;
+            height: 16px;
+        }
+
+    .sq-stat-value {
+        font-size: 42px;
+    }
+
+    .sq-stat-note {
+        font-size: 12px;
+    }
+
+    .sq-section-head {
+        min-height: 38px;
+    }
+
+    .sq-toolbar {
+        gap: 9px;
+    }
+
+        .sq-toolbar .sq-h2 {
+            flex-basis: 160px;
+        }
+
+            .sq-toolbar .sq-h2 small {
+                font-size: 12px;
+            }
+
+    .sq-select-wrap {
+        height: 36px;
+        border-radius: 20px;
+    }
+
+        .sq-select-wrap select {
+            max-width: 150px;
+            height: 34px;
+            padding: 0 28px 0 13px;
+            font-size: 12px;
+        }
+
+        .sq-select-wrap svg {
+            right: 10px;
+        }
+
+    .sq-view-toggle {
+        padding: 3px;
+        border-radius: 20px;
+    }
+
+        .sq-view-toggle button {
+            width: 30px;
+            height: 30px;
+        }
+
+    .sq-chart-grid {
+        grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+        gap: 12px;
+    }
+
+    .sq-chart-card.terracotta-row-card {
+        gap: 10px;
+        padding: 10px;
+        border-radius: 21px;
+    }
+
+    .sq-thumb.chart-preview-container {
+        border-radius: 16px;
+    }
+
+    .sq-chart-info {
+        gap: 7px;
+        padding: 2px 4px 0;
+    }
+
+    .sq-chart-title {
+        font-size: 14px;
+    }
+
+    .sq-chart-status {
+        padding: 3px 7px;
+        font-size: 10px;
+    }
+
+    .sq-chart-id, .sq-chart-key {
+        font-size: 11px;
+    }
+
+        .sq-chart-key .sq-icon-btn {
+            width: 22px;
+            height: 22px;
+        }
+
+    .sq-chart-actions {
+        gap: 7px;
+    }
+
+        .sq-chart-actions .sq-btn-dark {
+            height: 34px;
+            padding: 0 12px;
+            border-radius: 18px;
+            font-size: 12px;
+        }
+
+        .sq-chart-actions .sq-btn-out {
+            width: 34px;
+            height: 34px;
+        }
+
+            .sq-chart-actions .sq-btn-out svg {
+                width: 15px;
+                height: 15px;
+            }
+
+    .sq-dashboard-rail .sq-section {
+        padding: 18px 16px 16px;
+        border-radius: 14px;
+    }
+
+    .sq-rail-title {
+        font-size: 15px;
+    }
+
+    .sq-recent-row {
+        gap: 10px;
+        padding: 7px 3px;
+    }
+
+    .sq-recent-thumb {
+        flex-basis: 42px;
+        width: 42px;
+        height: 42px;
+        border-radius: 11px;
+    }
+
+    .sq-recent-name {
+        font-size: 12px;
+    }
+
+    .sq-recent-id {
+        font-size: 10px;
+    }
+
+    .sq-rail-btn {
+        height: 38px;
+        padding: 0 14px;
+        border-radius: 20px;
+        font-size: 12px;
+    }
+
+    .sq-tip {
+        gap: 11px;
+        padding: 16px;
+        border-radius: 20px;
+    }
+
+    .sq-tip-title {
+        font-size: 12px;
+    }
+
+    .sq-tip-text {
+        font-size: 11px;
+    }
+
+    @@media (max-width: 1050px) {
+        .sq-shell {
+            grid-template-columns: 160px minmax(0, 1fr);
+            gap: 16px;
+            padding: 18px;
+        }
+
+        .sq-dashboard-body {
+            grid-template-columns: minmax(0, 1fr) 230px;
+            gap: 14px;
+        }
+
+        .sq-chart-grid {
+            grid-template-columns: repeat(auto-fill, minmax(195px, 1fr));
+        }
+    }
+
+    @@media (max-width: 760px) {
+        .sq-shell {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            padding: 16px;
+        }
+
+        .sq-dashboard-body {
+            grid-template-columns: 1fr;
+        }
+
+        .sq-dashboard-rail {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        }
+    }
+
+    /* ─── large cards ─── */
+    .sq-chart-grid:not(.list) {
+        grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+        gap: 16px;
+    }
+
+    .sq-chart-card.terracotta-row-card {
+        align-items: stretch;
+        justify-content: flex-start;
+        gap: 10px;
+        padding: 12px;
+        border: 0;
+        border-radius: 26px;
+        background: #F4F4F4;
+        box-shadow: none;
+    }
+
+        .sq-chart-card.terracotta-row-card:hover {
+            border-color: transparent;
+            box-shadow: 0 8px 22px rgba(0,0,0,.09);
+        }
+
+        .sq-chart-card.terracotta-row-card.active {
+            box-shadow: 0 0 0 2px rgba(123,30,58,.15);
+        }
+
+    .sq-chart-top {
+        display: block;
+    }
+
+    .sq-thumb.chart-preview-container {
+        position: relative;
+        width: 100%;
+        height: auto;
+        aspect-ratio: 2.05 / 1;
+        border: 0;
+        border-radius: 21px;
+        background: #E5E5E5;
+    }
+
+    .sq-thumb .canvas-container, .sq-thumb canvas {
+        width: 100% !important;
+        height: 100% !important;
+    }
+
+    .sq-chart-info {
+        gap: 6px;
+        padding: 7px 5px 0;
+    }
+
+    .sq-chart-title {
+        font-size: 16px;
+    }
+
+    .sq-chart-status {
+        padding: 4px 10px;
+        border-radius: 8px;
+        font-size: 12px;
+    }
+
+    .sq-chart-id {
+        font-size: 14px;
+    }
+
+    .sq-chart-key {
+        gap: 7px;
+        font-size: 12px;
+    }
+
+        .sq-chart-key .sq-icon-btn {
+            width: 26px;
+            height: 26px;
+            background: transparent;
+        }
+
+    .sq-chart-actions {
+        gap: 8px;
+        padding: 0 5px 2px;
+        border: 0;
+    }
+
+        .sq-chart-actions .sq-btn-dark {
+            flex: 1;
+            height: 43px;
+            border-radius: 24px;
+            background: #7B1E3A;
+            font-size: 14px;
+        }
+
+        .sq-chart-actions .sq-btn-out {
+            width: 43px;
+            height: 43px;
+            border: 1px solid #E0E0E0;
+            border-radius: 50%;
+        }
+
+            .sq-chart-actions .sq-btn-out svg {
+                width: 18px;
+                height: 18px;
+            }
+
+    .sq-chart-grid.list {
+        grid-template-columns: 1fr;
+    }
+
+        .sq-chart-grid.list .sq-chart-card {
+            display: grid;
+            grid-template-columns: 225px minmax(0, 1fr);
+            grid-template-rows: minmax(0, 1fr) auto;
+            align-items: center;
+            column-gap: 20px;
+            row-gap: 10px;
+            min-height: 160px;
+            padding: 12px;
+        }
+
+        .sq-chart-grid.list .sq-chart-top {
+            grid-column: 1;
+            grid-row: 1 / span 2;
+            width: 100%;
+        }
+
+        .sq-chart-grid.list .sq-thumb.chart-preview-container {
+            aspect-ratio: 225 / 137;
+            border-radius: 20px;
+        }
+
+        .sq-chart-grid.list .sq-chart-info {
+            grid-column: 2;
+            grid-row: 1;
+            align-self: end;
+            padding: 0;
+        }
+
+        .sq-chart-grid.list .sq-chart-title-line {
+            align-items: flex-start;
+        }
+
+        .sq-chart-grid.list .sq-chart-actions {
+            grid-column: 2;
+            grid-row: 2;
+            align-self: start;
+            width: 100%;
+            padding: 0;
+        }
+
+            .sq-chart-grid.list .sq-chart-actions .sq-btn-dark {
+                height: 43px;
+            }
+
+            .sq-chart-grid.list .sq-chart-actions .sq-btn-out {
+                width: 43px;
+                height: 43px;
+            }
+
+    @@media (max-width: 760px) {
+        .sq-chart-grid:not(.list) {
+            grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+        }
+
+        .sq-chart-grid.list .sq-chart-top {
+            width: 160px;
+        }
+
+        .sq-chart-grid.list .sq-chart-card {
+            grid-template-columns: 160px minmax(0, 1fr);
+            column-gap: 14px;
+            min-height: 125px;
+        }
+
+        .sq-chart-grid.list .sq-chart-actions .sq-btn-dark, .sq-chart-grid.list .sq-chart-actions .sq-btn-out {
+            height: 38px;
+        }
+
+        .sq-chart-grid.list .sq-chart-actions .sq-btn-out {
+            width: 38px;
+        }
+    }
+
+    @@media (max-width: 520px) {
+        .sq-chart-grid.list .sq-chart-card {
+            grid-template-columns: 112px minmax(0, 1fr);
+            column-gap: 10px;
+            row-gap: 7px;
+            min-height: 106px;
+            padding: 9px;
+        }
+
+        .sq-chart-grid.list .sq-chart-top {
+            width: 112px;
+        }
+
+        .sq-chart-grid.list .sq-chart-title {
+            font-size: 13px;
+        }
+
+        .sq-chart-grid.list .sq-chart-status {
+            padding: 3px 6px;
+            font-size: 10px;
+        }
+
+        .sq-chart-grid.list .sq-chart-id, .sq-chart-grid.list .sq-chart-key {
+            font-size: 10px;
+        }
+
+        .sq-chart-grid.list .sq-chart-actions {
+            gap: 5px;
+        }
+
+            .sq-chart-grid.list .sq-chart-actions .sq-btn-dark, .sq-chart-grid.list .sq-chart-actions .sq-btn-out {
+                height: 34px;
+            }
+
+            .sq-chart-grid.list .sq-chart-actions .sq-btn-out {
+                width: 34px;
+            }
+    }
+
+    @@media (max-width: 760px) {
+        .sq-shell {
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+            padding: 16px;
+        }
+
+        .sq-content, .sq-dashboard-main, .sq-dashboard-rail {
+            width: 100%;
+            min-width: 0;
+        }
+
+        .sq-header {
+            flex-wrap: wrap;
+        }
+
+        .sq-header-title {
+            flex: 1 1 100%;
+        }
+
+        .sq-search {
+            flex: 1 1 220px;
+            max-width: none;
+            min-width: 0;
+        }
+
+        .sq-dashboard-body {
+            grid-template-columns: minmax(0, 1fr);
+        }
+
+        .sq-dashboard-rail {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+        }
+
+        .sq-toolbar {
+            flex-wrap: wrap;
+        }
+
+            .sq-toolbar .sq-h2 {
+                flex: 1 1 100%;
+            }
+
+        .sq-chart-grid:not(.list) {
+            grid-template-columns: minmax(0, 1fr);
+        }
+    }
+
+    @@media (max-width: 520px) {
+        .sq-shell {
+            gap: 14px;
+            padding: 10px;
+        }
+
+        .sq-content, .sq-main, .sq-dashboard-body, .sq-dashboard-main, .sq-dashboard-rail {
+            gap: 12px;
+        }
+
+        .sq-header {
+            gap: 8px;
+        }
+
+        .sq-header-title {
+            font-size: 23px;
+        }
+
+        .sq-search {
+            flex: 1 1 100%;
+            height: 42px;
+        }
+
+        .sq-btn-dark.sq-create {
+            height: 40px;
+            padding: 0 16px;
+        }
+
+        .sq-header-icon {
+            flex-basis: 40px;
+            width: 40px;
+            height: 40px;
+        }
+
+        .sq-avatar {
+            width: 40px;
+            height: 40px;
+        }
+
+        .sq-section {
+            gap: 12px;
+            padding: 13px;
+            border-radius: 18px;
+        }
+
+        .sq-stats {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .sq-stat.first {
+            grid-column: 1 / -1;
+        }
+
+        .sq-stat {
+            padding: 12px;
+        }
+
+        .sq-stat-value {
+            font-size: 32px;
+        }
+
+        .sq-toolbar {
+            gap: 8px;
+        }
+
+            .sq-toolbar .sq-select-wrap {
+                flex: 1 1 calc(50% - 8px);
+                min-width: 0;
+            }
+
+                .sq-toolbar .sq-select-wrap select {
+                    width: 100%;
+                    max-width: none;
+                }
+
+        .sq-view-toggle {
+            margin-left: auto;
+        }
+
+        .sq-chart-grid:not(.list) {
+            grid-template-columns: minmax(0, 1fr);
+        }
+
+        .sq-chart-card.terracotta-row-card {
+            padding: 10px;
+            border-radius: 20px;
+        }
+
+        .sq-thumb.chart-preview-container {
+            border-radius: 16px;
+        }
+
+        .sq-chart-grid.list .sq-chart-card {
+            grid-template-columns: 96px minmax(0, 1fr);
+            column-gap: 9px;
+            row-gap: 6px;
+            min-height: 96px;
+            padding: 8px;
+        }
+
+        .sq-chart-grid.list .sq-chart-top {
+            width: 96px;
+        }
+
+        .sq-chart-grid.list .sq-chart-title {
+            font-size: 12px;
+        }
+
+        .sq-chart-grid.list .sq-chart-id, .sq-chart-grid.list .sq-chart-key {
+            font-size: 9px;
+        }
+
+        .sq-chart-grid.list .sq-chart-actions {
+            gap: 4px;
+        }
+
+            .sq-chart-grid.list .sq-chart-actions .sq-btn-dark, .sq-chart-grid.list .sq-chart-actions .sq-btn-out {
+                height: 32px;
+            }
+
+            .sq-chart-grid.list .sq-chart-actions .sq-btn-out {
+                width: 32px;
+            }
+
+        .sq-dashboard-rail {
+            grid-template-columns: minmax(0, 1fr);
+        }
+
+        .sq-key-row {
+            flex-wrap: wrap;
+        }
+
+        .sq-key-value {
+            flex-basis: 100%;
+            order: 1;
+            overflow-wrap: anywhere;
+        }
+    }
+
+    @@media (max-width: 360px) {
+        .sq-shell {
+            padding: 8px;
+        }
+
+        .sq-header-icon {
+            display: none;
+        }
+
+        .sq-section {
+            padding: 10px;
+        }
+
+        .sq-chart-title {
+            font-size: 14px;
+        }
+    }
+
+    /* ─── THEME VARIABLE OVERRIDES ─── */
+    body, .sq-page {
+        background: var(--color-bg);
+        color: var(--color-text);
+    }
+
+        .sq-page :focus-visible {
+            outline-color: var(--color-primary);
+        }
+
+        .sq-page .sq-search, .sq-page .sq-section, .sq-page .sq-empty, .sq-page .sq-menu {
+            background-color: var(--color-surface);
+        }
+
+        .sq-page .sq-search {
+            border-color: var(--color-border);
+            color: var(--color-text-muted);
+        }
+
+            .sq-page .sq-search input, .sq-page .sq-header-title, .sq-page .sq-h2, .sq-page .sq-chart-title, .sq-page .sq-rail-title {
+                color: var(--color-text);
+            }
+
+                .sq-page .sq-search input::placeholder, .sq-page .sq-page-subtitle, .sq-page .sq-count, .sq-page .sq-chart-id, .sq-page .sq-chart-key, .sq-page .sq-recent-id {
+                    color: var(--color-text-muted);
+                }
+
+        .sq-page .sq-btn-dark, .sq-page .sq-avatar {
+            background: var(--color-primary);
+            color: var(--color-on-primary);
+        }
+
+            .sq-page .sq-btn-dark:hover {
+                background: var(--color-primary-hover);
+            }
+
+        .sq-page .sq-menu, .sq-page .sq-chart-card, .sq-page .sq-btn-out, .sq-page .sq-select-wrap, .sq-page .sq-view-toggle, .sq-page .sq-stat.first {
+            border-color: var(--color-border);
+        }
+
+        .sq-page .sq-chart-card {
+            background: var(--color-surface);
+        }
+
+            .sq-page .sq-chart-card:hover, .sq-page .sq-chart-card.active {
+                border-color: var(--color-primary);
+            }
+
+            .sq-page .sq-chart-card.active {
+                box-shadow: 0 0 0 2px var(--color-primary-soft);
+            }
+
+        .sq-page .sq-thumb.chart-preview-container {
+            background: var(--color-border);
+        }
+
+        .sq-page .sq-chart-status {
+            background: var(--color-bg);
+            color: var(--color-text-muted);
+        }
+
+            .sq-page .sq-chart-status.active {
+                background: var(--color-success-soft);
+                color: var(--color-success);
+            }
+
+        .sq-page .sq-chart-actions .sq-btn-dark {
+            background: var(--color-primary);
+        }
+
+            .sq-page .sq-chart-actions .sq-btn-dark:hover {
+                background: var(--color-primary-hover);
+            }
+
+        .sq-page .sq-btn-out, .sq-page .sq-icon-btn {
+            color: var(--color-text);
+        }
+
+            .sq-page .sq-btn-out:hover, .sq-page .sq-icon-btn:hover, .sq-page .sq-recent-row:hover, .sq-page .sq-view-toggle button.on {
+                
+                color: var(--color-primary);
+            }
+
+        .sq-page .sq-select-wrap {
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+        }
+
+            .sq-page .sq-select-wrap select {
+                color: var(--color-text);
+            }
+
+        .sq-page .sq-stats, .sq-page .sq-view-toggle {
+            background: var(--color-bg);
+        }
+
+        .sq-page .sq-stat.first {
+            background: var(--color-surface);
+        }
+
+        .sq-page .sq-recent-thumb, .sq-page .sq-chart-card.terracotta-row-card {
+            background: var(--color-bg);
+        }
+
+        .sq-page .sq-tip {
+            background: var(--color-success-soft);
+        }
+
+        .sq-page .sq-tip-title, .sq-page .sq-tip-close {
+            color: var(--color-success);
+        }
+
+        .sq-page .sq-tip-text {
+            color: var(--color-text);
+        }
+
+        .sq-page .sq-menu button {
+            color: var(--color-danger);
+        }
+
+            .sq-page .sq-menu button:hover {
+                background: var(--color-danger-soft);
+            }
+
+    .sq-flash-toast {
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        z-index: 1100;
+        transform: translateX(-50%);
+        padding: 11px 18px;
+        border: 1px solid var(--color-border);
+        border-radius: 10px;
+        background: var(--color-surface);
+        color: var(--color-text);
+        box-shadow: var(--shadow-card);
+        animation: fadeSlideIn 0.3s ease;
+    }
+
+    .sq-header {
+        justify-content: space-between;
+    }
+
+    .sq-header-actions {
+        display: flex;
+        flex: 1 1 100%;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 12px;
+        width: 100%;
+        min-width: 0;
+        margin-left: 0;
+    }
+
+        .sq-header-actions.settings {
+            justify-content: flex-end;
+        }
+
+        .sq-header-actions .sq-search {
+            flex: 0 1 340px;
+            max-width: 340px;
+            margin-right: auto;
+        }
+
+        .sq-header-actions .sq-avatar-wrap {
+            flex: 0 0 auto;
+            margin-left: 0;
+        }
+
+    @@media (max-width: 760px) {
+        .sq-header-actions {
+            flex-basis: 100%;
+        }
+
+            .sq-header-actions .sq-search {
+                flex: 1 1 220px;
+            }
+    }
+
+    @@media (max-width: 520px) {
+        .sq-header-actions {
+            justify-content: flex-end;
+            column-gap: 10px;
+            row-gap: 10px;
+        }
+
+            .sq-header-actions .sq-search {
+                flex: 1 1 100%;
+                max-width: none;
+                margin-right: 0;
+            }
+    }
+
+    /* ─── PROFILE POPOVER (API keys) ─── */
+    .sq-page .sq-menu.sq-profile-menu {
+        width: min(330px, calc(100vw - 24px));
+        padding: 0;
+        overflow: hidden;
+        border: 1px solid var(--color-border);
+        border-radius: 22px;
+        box-shadow: 0 14px 40px rgba(0,0,0,.14);
+        animation: fadeSlideIn .18s ease;
+    }
+
+    .sq-pm-head {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 16px;
+    }
+
+    .sq-pm-avatar {
+        flex: 0 0 40px;
+        display: grid;
+        place-items: center;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: var(--color-primary);
+        color: var(--color-on-primary);
+        font-weight: 700;
+    }
+
+    .sq-pm-who {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    .sq-pm-name, .sq-pm-email {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .sq-pm-name {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--color-text);
+    }
+
+    .sq-pm-email {
+        font-size: 12px;
+        color: var(--color-text-muted);
+    }
+
+    .sq-pm-section {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        padding: 14px 16px 16px;
+        border-top: 1px solid var(--color-border);
+    }
+
+    .sq-pm-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--color-text);
+    }
+
+    .sq-pm-hint {
+        margin: 0;
+        font-size: 11px;
+        line-height: 1.4;
+        color: var(--color-text-muted);
+    }
+
+    .sq-pk {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 10px 10px 10px 14px;
+        border-radius: 16px;
+        background: var(--color-bg);
+    }
+
+    .sq-pk-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+    }
+
+    .sq-pk-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--color-text);
+    }
+
+    .sq-pk-badge {
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 10px;
+        font-weight: 600;
+    }
+
+        .sq-pk-badge.public {
+            background: var(--color-success-soft);
+            color: var(--color-success);
+        }
+
+        .sq-pk-badge.secret {
+            background: var(--color-danger-soft);
+            color: var(--color-danger);
+        }
+
+    .sq-pk-field {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .sq-pk-value {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 11px;
+        color: var(--color-text);
+    }
+
+    .sq-page .sq-menu .sq-pk-btn {
+        flex: 0 0 30px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 30px;
+        height: 30px;
+        padding: 0;
+        border: 0;
+        border-radius: 50%;
+        background: var(--color-surface);
+        color: var(--color-text);
+    }
+
+        .sq-page .sq-menu .sq-pk-btn:hover {
+            background: var(--color-primary-soft);
+            color: var(--color-primary);
+        }
+
+    .sq-pm-foot {
+        padding: 8px;
+        border-top: 1px solid var(--color-border);
+    }
+
+    .sq-pm-logout {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 600;
+    }
+
+    /* ─── Chart preview canvas + favorite star ─── */
+    .sq-page .sq-thumb.chart-preview-container canvas {
+        position: absolute;
+        inset: 0;
+        width: 100% !important;
+        height: 100% !important;
+        image-rendering: auto;
+    }
+
+    .sq-page .sq-fav {
+        position: absolute;
+        top: 8px;
+        left: 9px;
+        z-index: 2;
+        display: grid;
+        place-items: center;
+        width: 34px;
+        height: 34px;
+        padding: 0;
+        border: 0;
+        border-radius: 50%;
+        background: var(--color-surface);
+        color: var(--color-text-muted);
+        box-shadow: 0 1px 4px rgba(0,0,0,.15);
+        transition: transform .15s, color .15s;
+    }
+
+        .sq-page .sq-fav:hover {
+            transform: scale(1.08);
+            color: var(--color-warning, #F5B301);
+        }
+
+        .sq-page .sq-fav.on {
+            color: var(--color-warning, #F5B301);
+        }
+
+    @@media (max-width: 520px) {
+        .sq-page .sq-chart-grid.list .sq-fav {
+            top: 5px;
+            left: 5px;
+            width: 24px;
+            height: 24px;
+        }
+
+            .sq-page .sq-chart-grid.list .sq-fav svg {
+                width: 12px;
+                height: 12px;
+            }
+    }
+
+    /* ─── Recently updated: real previews ─── */
+    .sq-page .sq-recent-thumb {
+        position: relative;
+    }
+
+        .sq-page .sq-recent-thumb canvas {
+            position: absolute;
+            inset: 0;
+            width: 100% !important;
+            height: 100% !important;
+            display: block;
+        }
+
+    /* ─── Chart card redesign (grid view only; list view is unchanged) ─── */
+    .sq-page .sq-stage-pill {
+        display: none;
+    }
+
+    .sq-page .sq-chart-grid:not(.list) .sq-stage-pill {
+        display: block;
+        position: absolute;
+        top: 9%;
+        left: 50%;
+        width: 26%;
+        height: 8px;
+        border-radius: 999px;
+        background: var(--color-text-muted);
+        opacity: .28;
+        transform: translateX(-50%);
+        pointer-events: none;
+    }
+
+    .sq-page .sq-chart-grid:not(.list) .sq-chart-card.terracotta-row-card {
+        gap: 12px;
+        padding: 12px;
+        border-radius: 26px;
+    }
+
+    .sq-page .sq-chart-grid:not(.list) .sq-thumb.chart-preview-container {
+        border-radius: 20px;
+    }
+
+    .sq-page .sq-chart-grid:not(.list) .sq-chart-info {
+        gap: 5px;
+        padding: 4px 6px 0;
+    }
+
+    .sq-page .sq-chart-grid:not(.list) .sq-chart-title {
+        font-size: 17px;
+        font-weight: 700;
+        letter-spacing: -.01em;
+    }
+
+    .sq-page .sq-chart-grid:not(.list) .sq-chart-id {
+        font-size: 14px;
+    }
+
+    .sq-page .sq-chart-grid:not(.list) .sq-chart-key {
+        font-size: 12px;
+        gap: 6px;
+    }
+
+        .sq-page .sq-chart-grid:not(.list) .sq-chart-key .sq-icon-btn {
+            width: 24px;
+            height: 24px;
+        }
+
+    .sq-page .sq-chart-grid:not(.list) .sq-chart-actions {
+        gap: 8px;
+        padding: 2px 4px 2px;
+    }
+
+        .sq-page .sq-chart-grid:not(.list) .sq-chart-actions .sq-btn-dark {
+            height: 44px;
+            font-size: 14px;
+            border-radius: 24px;
+        }
+
+        .sq-page .sq-chart-grid:not(.list) .sq-chart-actions .sq-btn-out {
+            width: 44px;
+            height: 44px;
+            background: var(--color-surface);
+        }
+
+            .sq-page .sq-chart-grid:not(.list) .sq-chart-actions .sq-btn-out svg {
+                width: 17px;
+                height: 17px;
+            }
+
+    /* favorite star: filled when on, matches the new design */
+    .sq-page .sq-fav {
+        color: var(--color-text);
+    }
+
+        .sq-page .sq-fav:hover, .sq-page .sq-fav.on {
+            color: var(--color-text);
+        }
+
+    .sq-page .sq-chart-grid:not(.list) .sq-fav {
+        top: 10px;
+        left: 10px;
+        width: 36px;
+        height: 36px;
+    }
+
+    /* ─── match index page type scale ─── */
+    .sq-page .sq-header-title {
+        font-size: 18px;
+    }
+
+    .sq-page .sq-h2,
+    .sq-page .sq-rail-title {
+        font-size: 14.5px;
+    }
+    .sq-page .sq-stat-value {
+        font-size: 32px;
+    }
+
+    .sq-page .sq-chart-grid:not(.list) .sq-chart-title {
+        font-size: 14.5px;
+    }
+
+
+    .sq-page .sq-stat-note,
+    .sq-page .sq-chart-status,
+    .sq-page .sq-recent-id,
+    .sq-page .sq-tip-text {
+        font-size: 11.5px;
+    }
 </style>
 
-<!-- ─── HEADER (with centered tabs & avatar dropdown) ─── -->
-<header class="terracotta-header">
-    <div class="header-left">
-        <div class="header-title">
-            <i class="fa-solid fa-couch"></i>
-            <span>Seats<span style="color: rgba(255,255,255,0.7);"></span>Q</span>
-        </div>
-    </div>
+<div class="sq-page">
+    <div class="sq-shell">
+        <SeatsQSidebar ActiveView="@activeView" UserEmail="@UserEmail" ViewChanged="SetView" />
 
-    <ul class="nav header-tabs" id="myTab" role="tablist">
-        <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview" type="button" role="tab">
-                <i class="fa-solid fa-chart-pie"></i> Charts
-            </button>
-        </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link" id="settings-tab" data-bs-toggle="tab" data-bs-target="#settings" type="button" role="tab">
-                <i class="fa-solid fa-gear"></i> Settings
-            </button>
-        </li>
-    </ul>
-
-    <div class="header-right">
-        <div class="avatar-wrapper" @onclick="ToggleDropdown" @onclick:stopPropagation="true">
-            <div class="avatar">@UserInitial</div>
-            <div class="dropdown-menu @(showDropdown ? "show" : "")">
-                <div class="dropdown-user-info">
-                    <div class="user-email">@UserEmail</div>
-                    @* <div style="font-size:11px; color:var(--text-muted);">User ID: @UserId</div> *@
-                </div>
-                @* <div class="dropdown-divider"></div> *@
-                <button class="dropdown-item danger" @onclick="Logout">
-                    <i class="fa-solid fa-right-from-bracket"></i> Logout
-                </button>
-            </div>
-        </div>
-    </div>
-</header>
-
-<!-- ─── TAB CONTENT ─── -->
-<div class="container-fluid">
-    <div class="tab-content">
-
-        <!-- OVERVIEW TAB -->
-        <div class="tab-pane fade show active" id="overview" role="tabpanel">
-            <div class="terracotta-dashboard">
-
-                <!-- Action Bar -->
-                <div class="terracotta-action-bar" style="margin-top:20px;">
-                    <div class="search-wrap">
-                        <i class="fa-solid fa-magnifying-glass"></i>
-                        <input type="text" placeholder="Search charts..." @bind="searchText" />
-                    </div>
-                    <button class="create-btn" @onclick="CreateChart">
-                        <i class="fa-solid fa-plus"></i> Create Chart
-                    </button>
-                </div>
-
-                <!-- Chart List (full-width rows) -->
-                @if (Charts != null && Charts.Tables.Count > 0 && Charts.Tables[0].Rows.Count > 0)
-                {
-                    <div class="terracotta-list">
-                        @foreach (DataRow dr in Charts.Tables[0].Rows)
-                        {
-                            var chartId = dr["chart_id"].ToString();
-                            if (!string.IsNullOrEmpty(searchText) &&
-                            !dr["chart_title"].ToString().Contains(searchText, StringComparison.OrdinalIgnoreCase))
-                                continue;
-
-                            var chartJson = dr["chart_json"]?.ToString() ?? "";
-                            var chartTitle = dr["chart_title"].ToString();
-                            var chartKey = dr["chart_key"].ToString();
-
-                            <div class="terracotta-row-card @(SelectedChartId == chartId ? "active" : "")"
-                                 @onclick="() => SelectChart(chartId)"
-                                 data-chart-json="@chartJson"
-                                 data-chart-id="@chartId">
-
-                                <!-- Left: Preview + info -->
-                                <div class="card-left">
-                                    <div class="chart-preview-container">
-                                        <canvas id="preview-@chartId" width="64" height="64"></canvas>
-                                        <div class="preview-placeholder">
-                                            <i class="fa-solid fa-layer-group"></i>
-                                        </div>
-                                    </div>
-                                    <div class="card-info">
-                                        <div class="card-title" title="@chartTitle">@chartTitle</div>
-                                        <div class="card-key">
-                                            <span>@chartKey</span>
-                                            <button class="copy-btn @(ChartKeyCopied == chartId ? "copied" : "")"
-                                                    @onclick:stopPropagation="true"
-                                                    @onclick='() => CopyText(chartKey, "Chartkey", chartId)'>
-                                                @if (ChartKeyCopied == chartId)
-                                                {
-                                                    <i class="fa-solid fa-check-circle"></i>
-                                                }
-                                                else
-                                                {
-                                                    <i class="fa-solid fa-copy"></i>
-                                                }
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Right: meta + actions -->
-                                @* <div class="card-right">
-                                    <div class="card-meta">
-                                        <span><i class="fa-solid fa-hashtag"></i> @dr["chart_id"]</span>
-                                        <span><i class="fa-solid fa-clock"></i> Updated</span>
-                                        <span><span class="status-dot"></span> Active</span>
-                                    </div>
-                                    <i class="fa-solid fa-pen-to-square card-action"
-                                       @onclick:stopPropagation="true"
-                                       @onclick="() => EditChart(chartId)"></i>
-                                </div> *@
-
-                                <!-- Right: Preview + actions -->
-                                <div class="card-right">
-                                   @*  <a href="https://localhost:7255/counter/@chartKey"
-                                       target="_blank"
-                                       class="preview-link"
-                                       @onclick:stopPropagation="true"
-                                       title="View chart">
-                                        <i class="fa-solid fa-eye"></i> Preview
-                                    </a> *@
-                                     <a href="http://dev.theticketworld.com/seating/counter/@chartKey"
-                                       target="_blank"
-                                       class="preview-link"
-                                       @onclick:stopPropagation="true"
-                                       title="View chart">
-                                        <i class="fa-solid fa-eye"></i> Preview
-                                    </a>
-                                    <i class="fa-solid fa-pen-to-square card-action"
-                                       @onclick:stopPropagation="true"
-                                       @onclick="() => EditChart(chartId)"></i>
-                                </div>
-                            </div>
-                        }
-                    </div>
-
-                    <!-- Details Panel (shown when a chart is selected) -->
-                    @* @if (!string.IsNullOrEmpty(SelectedChartId))
+        <main class="sq-content">
+            <header class="sq-header">
+                <div class="sq-header-actions @(activeView == "settings" ? "settings" : "")">
+                    @if (activeView == "charts")
                     {
-                        <div class="terracotta-details-panel">
-                            <div class="details-top">
-                                <h3>📊 @ChartName</h3>
-                                <span class="status-badge">● Published</span>
+                        <label class="sq-search">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg>
+                            <input type="search" placeholder="Search anything..." aria-label="Search charts" @bind="searchText" @bind:event="oninput" />
+                        </label>
+                        <button type="button" class="sq-btn-dark sq-create" style="box-shadow: inset 0 0 1px #9590ff, inset 0 -2px 0 #0003, 0 1px 2px #0006, 0 8px 24px -6px #5b5bf099 !important;" @onclick="CreateChart">Create</button>
+                        <span class="sq-header-icon" aria-hidden="true">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"></path></svg>
+                        </span>
+                        <span class="sq-header-icon" aria-hidden="true">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8z"></path></svg>
+                        </span>
+                    }
+                    <div class="sq-avatar-wrap avatar-wrapper" @onclick="ToggleDropdown" @onclick:stopPropagation="true">
+                        <button type="button" class="sq-avatar" aria-label="Open account menu">@UserInitial</button>
+
+                        <div class="sq-menu sq-profile-menu @(showDropdown ? "show" : "")" @onclick:stopPropagation="true">
+                            <div class="sq-pm-head">
+                                <span class="sq-pm-avatar">@UserInitial</span>
+                                <div class="sq-pm-who">
+                                    <span class="sq-pm-name">@(string.IsNullOrWhiteSpace(UserName) ? "My account" : UserName)</span>
+                                    <span class="sq-pm-email">@UserEmail</span>
+                                </div>
                             </div>
-                            <div class="stats-grid">
-                                <div class="stat-item">
-                                    <h4>Chart Key</h4>
-                                    <span>@ChartKey</span>
+
+                            <div class="sq-pm-section">
+                                <div class="sq-pm-title">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4"></circle><path d="m11 12 9-9M16 7l3 3M14 9l2 2"></path></svg>
+                                    API keys
                                 </div>
-                                <div class="stat-item">
-                                    <h4>Chart ID</h4>
-                                    <span>@SelectedChartId</span>
+
+                                <div class="sq-pk">
+                                    <div class="sq-pk-top">
+                                        <span class="sq-pk-label">Public key</span>
+                                        <span class="sq-pk-badge public">Client-side</span>
+                                    </div>
+                                    <div class="sq-pk-field">
+                                        <code class="sq-pk-value" title="@PublicKey">@PublicKey</code>
+                                        <button type="button" class="sq-pk-btn" title="Copy public key" aria-label="Copy public key"
+                                                @onclick='() => CopyText(PublicKey, "Public")'>
+                                            @if (PublicCopied)
+                                            {
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"></path></svg>
+                                            }
+                                            else
+                                            {
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="13" height="13" rx="2"></rect><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"></path></svg>
+                                            }
+                                        </button>
+                                    </div>
                                 </div>
+
+                                <div class="sq-pk">
+                                    <div class="sq-pk-top">
+                                        <span class="sq-pk-label">Secret key</span>
+                                        <span class="sq-pk-badge secret">Server only</span>
+                                    </div>
+                                    <div class="sq-pk-field">
+                                        <code class="sq-pk-value" title="@(secretVisible ? SecretKey : "Hidden")">@(secretVisible ? SecretKey : MaskKey(SecretKey))</code>
+                                        <button type="button" class="sq-pk-btn" title="@(secretVisible ? "Hide" : "Show") secret key" aria-label="Toggle secret key visibility"
+                                                @onclick="() => secretVisible = !secretVisible">
+                                            @if (secretVisible)
+                                            {
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.9 17.9A10.1 10.1 0 0 1 12 20c-7 0-10-8-10-8a17.7 17.7 0 0 1 4.1-5.4M9.9 4.2A9.7 9.7 0 0 1 12 4c7 0 10 8 10 8a17.8 17.8 0 0 1-2.2 3.2M1 1l22 22M14.1 14.1a3 3 0 1 1-4.2-4.2"></path></svg>
+                                            }
+                                            else
+                                            {
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-8 10-8 10 8 10 8-3.5 8-10 8S2 12 2 12Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                                            }
+                                        </button>
+                                        <button type="button" class="sq-pk-btn" title="Copy secret key" aria-label="Copy secret key"
+                                                @onclick='() => CopyText(SecretKey, "Secret")'>
+                                            @if (SecretCopied)
+                                            {
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"></path></svg>
+                                            }
+                                            else
+                                            {
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="13" height="13" rx="2"></rect><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"></path></svg>
+                                            }
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <p class="sq-pm-hint">Use the public key in your embed. Never expose the secret key in client-side code.</p>
+                            </div>
+
+                            <div class="sq-pm-foot">
+                                <button type="button" class="sq-pm-logout" @onclick="Logout">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 17l5-5-5-5M15 12H3"></path><path d="M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6"></path></svg>
+                                    Log out
+                                </button>
                             </div>
                         </div>
-                    } *@
-                }
-                else
-                {
-                    <div class="terracotta-empty-state">
-                        <i class="fa-solid fa-file-chart-pie"></i>
-                        <h4>No Charts Yet</h4>
-                        <p>Get started by creating your first chart.</p>
-                        <button style="background:linear-gradient(135deg, var(--accent-1), var(--accent-2));color: white;border: none;border-radius: var(--radius-md);padding: 10px 24px;font-weight: 600;font-size: 14px;cursor: pointer; transition: var(--transition); box-shadow: 0 4px 16px var(--accent-1-glow);align-items: center;gap: 8px; white-space: nowrap;" @onclick="CreateChart">
-                            <i class="fa-solid fa-plus"></i> Create Chart
-                        </button>
                     </div>
-                }
+                </div>
+            </header>
 
-            </div>
-        </div>
+            @if (!string.IsNullOrEmpty(flashMessage))
+            {
+                <div class="sq-flash-toast" role="status">@flashMessage</div>
+            }
 
-        <!-- SETTINGS TAB -->
-        <div class="tab-pane fade" id="settings" role="tabpanel">
-            <div class="terracotta-settings">
-                <h3><i class="fa-solid fa-sliders"></i> Workspace Settings</h3>
+            @if (activeView == "charts")
+            {
+                <div class="sq-dashboard-body">
+                    <main class="sq-dashboard-main">
+                        <section class="sq-section" aria-label="Overview">
+                            <h2 class="sq-h2">Overview</h2>
+                            <div class="sq-stats">
+                                <div class="sq-stat first">
+                                    <span class="sq-stat-label">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="2"></rect><rect x="14" y="3" width="7" height="7" rx="2"></rect><rect x="3" y="14" width="7" height="7" rx="2"></rect><rect x="14" y="14" width="7" height="7" rx="2"></rect></svg>
+                                        Charts
+                                    </span>
+                                    <span class="sq-stat-value">@TotalCount</span>
+                                    <span class="sq-stat-note">in your workspace</span>
+                                </div>
+                                <div class="sq-stat">
+                                    <span class="sq-stat-label">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>
+                                        Saved layouts
+                                    </span>
+                                    <span class="sq-stat-value">@LayoutCount</span>
+                                    <span class="sq-stat-note">with a saved seating layout</span>
+                                </div>
+                                <div class="sq-stat">
+                                    <span class="sq-stat-label">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20a6.5 6.5 0 0 1 13 0"></path><path d="M17 11a3 3 0 0 0 0-6"></path><path d="M18 14a5 5 0 0 1 3.5 4.8"></path></svg>
+                                        Chart keys
+                                    </span>
+                                    <span class="sq-stat-value">@ChartKeyCount</span>
+                                    <span class="sq-stat-note">available to preview</span>
+                                </div>
+                            </div>
+                        </section>
 
-                <div class="key-row">
-                    <span class="key-label">🔐 Secret Key</span>
-                    <span class="key-value">@SecretKey</span>
-                    <button class="copy-btn @(SecretCopied ? "copied" : "")" @onclick='() => CopyText(SecretKey, "Secret")'>
-                        @if (SecretCopied)
+                        @if (TotalCount > 0)
                         {
-                            <i class="fa-solid fa-check-circle"></i>
+                            <section class="sq-section" aria-label="Charts">
+                                <div class="sq-toolbar">
+                                    <h2 class="sq-h2">All charts <small>@(ShownCount == TotalCount ? TotalCount.ToString() : $"{ShownCount} of {TotalCount}")</small></h2>
+                                    <label class="sq-select-wrap">
+                                        <select aria-label="Filter charts" @bind="chartFilter">
+                                            <option value="all">All charts</option>
+                                            <option value="favorites">Favorites</option>
+                                            <option value="with-layout">With layout</option>
+                                            <option value="without-layout">Without layout</option>
+                                        </select>
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#4A4A4A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+                                    </label>
+                                    <label class="sq-select-wrap">
+                                        <select aria-label="Sort charts" @bind="chartSort">
+                                            <option value="recent">Recently added</option>
+                                            <option value="az">Name A to Z</option>
+                                            <option value="za">Name Z to A</option>
+                                        </select>
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#4A4A4A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+                                    </label>
+                                    <div class="sq-view-toggle" role="group" aria-label="View">
+                                        <button type="button" class="@(isGrid ? "on" : "")" aria-label="Grid view" aria-pressed="@isGrid" @onclick="() => isGrid = true">
+                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="2"></rect><rect x="14" y="3" width="7" height="7" rx="2"></rect><rect x="3" y="14" width="7" height="7" rx="2"></rect><rect x="14" y="14" width="7" height="7" rx="2"></rect></svg>
+                                        </button>
+                                        <button type="button" class="@(!isGrid ? "on" : "")" aria-label="List view" aria-pressed="@(!isGrid)" @onclick="() => isGrid = false">
+                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"></path></svg>
+                                        </button>
+                                    </div>
+                                </div>
+                                @if (ShownCount == 0)
+                                {
+                                    <div class="sq-empty">
+                                        <strong>@(chartFilter == "favorites" && string.IsNullOrWhiteSpace(searchText) ? "No favorites yet" : "No charts found")</strong>
+                                        <span>@(chartFilter == "favorites" && string.IsNullOrWhiteSpace(searchText) ? "Tap the star on a chart to add it here." : "Try a different search or filter.")</span>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="sq-chart-grid @(isGrid ? "" : "list")">
+                                        @foreach (DataRow dr in ShownCharts)
+                                        {
+                                            var chartId = dr["chart_id"]?.ToString() ?? "";
+                                            var chartJson = dr["chart_json"]?.ToString() ?? "";
+                                            var chartTitle = dr["chart_title"]?.ToString() ?? "Untitled chart";
+                                            var chartKey = dr["chart_key"]?.ToString() ?? "";
+                                            var hasLayout = !string.IsNullOrWhiteSpace(chartJson);
+                                            var isFav = favorites.Contains(chartId);
+                                            var dateText = ChartDate(dr);
+
+                                            <article @key="chartId" class="sq-chart-card terracotta-row-card @(SelectedChartId == chartId ? "active" : "")"
+                                                     @onclick="() => SelectChart(chartId)"
+                                                     data-chart-json="@chartJson"
+                                                     data-chart-id="@chartId">
+                                                <div class="sq-chart-top">
+                                                    <div class="sq-thumb chart-preview-container">
+                                                        <canvas id="preview-@chartId" width="64" height="64"></canvas>
+                                                        <div class="preview-placeholder" aria-hidden="true">
+                                                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v14H4z"></path><path d="m4 15 4-4 4 4 3-3 5 5"></path><circle cx="9" cy="9" r="1"></circle></svg>
+                                                        </div>
+                                                        <button type="button" class="sq-fav @(isFav ? "on" : "")"
+                                                                title="@(isFav ? "Remove from favorites" : "Add to favorites")"
+                                                                aria-label="@(isFav ? "Remove from favorites" : "Add to favorites")"
+                                                                aria-pressed="@(isFav ? "true" : "false")"
+                                                                @onclick:stopPropagation="true"
+                                                                @onclick="() => ToggleFavorite(chartId)">
+                                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="@(isFav ? "currentColor" : "none")" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.4 6.1 20.5l1.2-6.5L2.5 9.4l6.6-.9z"></path></svg>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                <div class="sq-chart-info">
+                                                    <div class="sq-chart-title-line">
+                                                        <div class="sq-chart-title" title="@chartTitle">@chartTitle</div>
+                                                        <span class="sq-chart-status @(hasLayout ? "active" : "")">@(hasLayout ? "Active" : "Draft")</span>
+                                                    </div>
+                                                    <div class="sq-chart-id">@(string.IsNullOrEmpty(dateText) ? $"Chart #{chartId}" : dateText)</div>
+                                                    <div class="sq-chart-key">
+                                                        <span>@chartKey</span>
+                                                        <button type="button" class="sq-icon-btn" title="Copy chart key" aria-label="Copy chart key"
+                                                                @onclick:stopPropagation="true"
+                                                                @onclick='() => CopyText(chartKey, "Chartkey", chartId)'>
+                                                            @if (ChartKeyCopied == chartId)
+                                                            {
+                                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"></path></svg>
+                                                            }
+                                                            else
+                                                            {
+                                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="13" height="13" rx="2"></rect><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"></path></svg>
+                                                            }
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                <div class="sq-chart-actions">
+                                                    <a href="@($"{NavManager.BaseUri}counter/{chartKey}")" style=" box-shadow: inset 0 0 1px #9590ff, inset 0 -2px 0 #0003, 0 1px 2px #0006, 0 8px 24px -6px #5b5bf099;a"
+                                                       target="_blank" rel="noopener noreferrer" class="sq-btn-dark"
+                                                       @onclick:stopPropagation="true">
+                                                        Open
+                                                    </a>
+                                                    <button type="button" class="sq-btn-out" style="inset 0 0 1px #ffffff, inset 0 -2px 0 #ffffff33, 0 1px 2px #13131366, 0 8px 24px -6px #b2b2b299 !important" title="Edit chart" aria-label="Edit chart" @onclick:stopPropagation="true" @onclick="() => EditChart(chartId)">
+                                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>
+                                                    </button>
+                                                    <button type="button" class="sq-btn-out" title="Copy share link" aria-label="Copy share link"
+                                                            @onclick:stopPropagation="true" @onclick='() => CopyText($"{NavManager.BaseUri}counter/{chartKey}", "Share", chartId)'>
+                                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"></path></svg>
+                                                    </button>
+                                                </div>
+                                            </article>
+                                        }
+                                    </div>
+                                }
+                            </section>
                         }
                         else
                         {
-                            <i class="fa-solid fa-copy"></i>
+                            <div class="sq-empty">
+                                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"></rect><path d="M7 8h10M7 12h6M7 16h3"></path></svg>
+                                <strong>No charts yet</strong>
+                                <span>Create your first seating chart to get started.</span>
+                                <button style=" box-shadow: inset 0 0 1px #9590ff, inset 0 -2px 0 #0003, 0 1px 2px #0006, 0 8px 24px -6px #5b5bf099 !important;" type="button" class="sq-btn-dark" @onclick="CreateChart">Create chart</button>
+                            </div>
                         }
-                    </button>
-                </div>
-
-                <div class="key-row">
-                    <span class="key-label">🌐 Public Key</span>
-                    <span class="key-value">@PublicKey</span>
-                    <button class="copy-btn @(PublicCopied ? "copied" : "")" @onclick='() => CopyText(PublicKey, "Public")'>
-                        @if (PublicCopied)
+                    </main>
+                    <aside class="sq-dashboard-rail">
+                        <section class="sq-section" aria-label="Recent charts">
+                            <h2 class="sq-rail-title">Recently updated</h2>
+                            @foreach (DataRow recentChart in RecentCharts)
+                            {
+                                var recentId = recentChart["chart_id"]?.ToString() ?? "";
+                                var recentTitle = recentChart["chart_title"]?.ToString() ?? "Untitled chart";
+                                var recentJson = recentChart["chart_json"]?.ToString() ?? "";
+                                <button type="button" class="sq-recent-row" @key="recentId" data-chart-json="@recentJson" @onclick="() => SelectChart(recentId)">
+                                    <span class="sq-recent-thumb" aria-hidden="true">
+                                        <canvas width="42" height="42"></canvas>
+                                        <svg class="sq-recent-fallback" viewBox="0 0 240 150">
+                                            <path d="M24 50 Q120 120 216 50" fill="none" stroke="#BDBDBD" stroke-width="12" stroke-linecap="round" stroke-dasharray="0 19"></path>
+                                            <path d="M40 82 Q120 138 200 82" fill="none" stroke="#40B76B" stroke-width="12" stroke-linecap="round" stroke-dasharray="0 19"></path>
+                                        </svg>
+                                    </span>
+                                    <span class="sq-recent-name">@recentTitle</span>
+                                    <span class="sq-recent-id">#@recentId</span>
+                                </button>
+                            }
+                            <button type="button" class="sq-btn-out sq-rail-btn" @onclick="ShowAllCharts">All charts</button>
+                        </section>
+                        <section class="sq-section" aria-label="Start new">
+                            <h2 class="sq-rail-title">Start new</h2>
+                            <button type="button" class="sq-btn-dark sq-rail-btn" style="font-weight: 600;justify-content:center; box-shadow: inset 0 0 1px #9590ff, inset 0 -2px 0 #0003, 0 1px 2px #0006, 0 8px 24px -6px #5b5bf099 !important;" @onclick="CreateChart">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+                                Create chart
+                            </button>
+                            <button type="button" class="sq-btn-out sq-rail-btn" @onclick='() => SetView("settings")'>
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.7 1.7-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5v.2h-2.4v-.2a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1L8 17l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H6.7v-2.4h.2a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9L8 8.6l1.7-1.7.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.5v-.2h2.4v.2a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1 1.7 1.7-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.5 1h.2V14h-.2a1.7 1.7 0 0 0-1.5 1z"></path></svg>
+                                Workspace settings
+                            </button>
+                        </section>
+                        @if (showTip)
                         {
-                            <i class="fa-solid fa-check-circle"></i>
+                            <section class="sq-tip">
+                                <div class="sq-tip-body">
+                                    <span class="sq-tip-title">Tip</span>
+                                    <span class="sq-tip-text">Open a chart to preview its seating layout, or edit it to make changes.</span>
+                                </div>
+                                <button type="button" class="sq-tip-close" aria-label="Dismiss tip" @onclick="() => showTip = false">
+                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg>
+                                </button>
+                            </section>
                         }
-                        else
-                        {
-                            <i class="fa-solid fa-copy"></i>
-                        }
-                    </button>
+                    </aside>
                 </div>
-
-                @* <div style="margin-top:20px; padding-top:16px; border-top:1px solid var(--border-subtle); text-align:right;">
-                    <span style="font-size:12px; color:var(--text-muted);">User ID: @UserId</span>
-                </div> *@
-            </div>
-        </div>
-
+            }
+            else
+            {
+                <div class="sq-settings-page">
+                    <section class="sq-section sq-settings" aria-label="Workspace settings">
+                        <div>
+                            <h3 class="sq-h2">API keys</h3>
+                            <p class="sq-page-subtitle">Use the public key in your client-side embed and keep the secret key on your server.</p>
+                        </div>
+                        <div class="sq-key-row">
+                            <span class="sq-key-label">Secret key</span>
+                            <span class="sq-key-value">@SecretKey</span>
+                            <button type="button" class="sq-icon-btn" title="Copy secret key" aria-label="Copy secret key"
+                                    @onclick='() => CopyText(SecretKey, "Secret")'>
+                                @if (SecretCopied)
+                                {
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"></path></svg>
+                                }
+                                else
+                                {
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="13" height="13" rx="2"></rect><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"></path></svg>
+                                }
+                            </button>
+                        </div>
+                        <div class="sq-key-row">
+                            <span class="sq-key-label">Public key</span>
+                            <span class="sq-key-value">@PublicKey</span>
+                            <button type="button" class="sq-icon-btn" title="Copy public key" aria-label="Copy public key"
+                                    @onclick='() => CopyText(PublicKey, "Public")'>
+                                @if (PublicCopied)
+                                {
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"></path></svg>
+                                }
+                                else
+                                {
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="13" height="13" rx="2"></rect><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"></path></svg>
+                                }
+                            </button>
+                        </div>
+                    </section>
+                </div>
+            }
+        </main>
     </div>
 </div>
 
@@ -1110,45 +3474,104 @@
     private string UserId { get; set; } = "0";
     private string SelectedChartId;
     private string searchText = "";
+    private string activeView = "charts";
+    private string chartFilter = "all";
+    private string chartSort = "recent";
+    private bool isGrid = true;
+    private bool showTip = true;
+    private bool secretVisible = false;
+    private HashSet<string> favorites = new();
+
     public string ChartId { get; set; } = "0";
     public DataSet Charts { get; set; } = new DataSet();
-    [Inject]
-    NavigationManager NavManager { get; set; }
-    [Inject]
-    ProtectedSessionStorage sessionStorage { get; set; }
+
+    private IEnumerable<DataRow> ChartRows =>
+        Charts.Tables.Count > 0 ? Charts.Tables[0].Rows.Cast<DataRow>() : Enumerable.Empty<DataRow>();
+
+    private IEnumerable<DataRow> ShownCharts
+    {
+        get
+        {
+            IEnumerable<DataRow> rows = ChartRows;
+            if (!string.IsNullOrWhiteSpace(searchText))
+            {
+                var term = searchText.Trim();
+                rows = rows.Where(row =>
+                    (row["chart_title"]?.ToString() ?? "").Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                    (row["chart_id"]?.ToString() ?? "").Contains(term, StringComparison.OrdinalIgnoreCase));
+            }
+
+            rows = chartFilter switch
+            {
+                "with-layout" => rows.Where(row => !string.IsNullOrWhiteSpace(row["chart_json"]?.ToString())),
+                "without-layout" => rows.Where(row => string.IsNullOrWhiteSpace(row["chart_json"]?.ToString())),
+                "favorites" => rows.Where(row => favorites.Contains(row["chart_id"]?.ToString() ?? "")),
+                _ => rows
+            };
+
+            return chartSort switch
+            {
+                "az" => rows.OrderBy(row => row["chart_title"]?.ToString(), StringComparer.OrdinalIgnoreCase),
+                "za" => rows.OrderByDescending(row => row["chart_title"]?.ToString(), StringComparer.OrdinalIgnoreCase),
+                _ => rows.OrderByDescending(row => Convert.ToInt32(row["chart_id"]))
+            };
+        }
+    }
+
+    private IEnumerable<DataRow> RecentCharts =>
+        ChartRows.OrderByDescending(row => Convert.ToInt32(row["chart_id"])).Take(4);
+    private int TotalCount => ChartRows.Count();
+    private int ShownCount => ShownCharts.Count();
+    private int LayoutCount => ChartRows.Count(row => !string.IsNullOrWhiteSpace(row["chart_json"]?.ToString()));
+    private int ChartKeyCount => ChartRows.Count(row => !string.IsNullOrWhiteSpace(row["chart_key"]?.ToString()));
+
+    [Inject] NavigationManager NavManager { get; set; }
+    [Inject] ProtectedSessionStorage sessionStorage { get; set; }
+    [Inject] IJSRuntime js { get; set; }
+
+    private string flashMessage = "";
     public bool showDropdown { get; set; } = false;
     public string PublicKey { get; set; } = "";
     public string SecretKey { get; set; } = "";
-    [Inject]
-    IJSRuntime js { get; set; }
     public bool SecretCopied { get; set; } = false;
     public bool PublicCopied { get; set; } = false;
-    public string ChartKeyCopied { get; set; } = ""; // holds the chart id of the copied key
+    public string ChartKeyCopied { get; set; } = "";
     public string ChartName { get; set; } = "";
     public string ChartKey { get; set; } = "";
     public string UserEmail { get; set; } = "";
     public string UserName { get; set; } = "";
-    private DotNetObjectReference<Index>? objRef;
     string UserInitial => !string.IsNullOrWhiteSpace(UserEmail) ? UserEmail.Substring(0, 1).ToUpper() : "?";
 
-    protected override async void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         var result = await sessionStorage.GetAsync<string>("UserEmail");
         if (result.Success) UserEmail = result.Value;
 
         var userIdResult = await sessionStorage.GetAsync<string>("UserId");
-        UserId = userIdResult.Value;
+        UserId = userIdResult.Value ?? "0";
         if (UserId != "" && UserId != "0")
         {
             GetAllCharts();
             GetUserKeys();
-            StateHasChanged();
+            var flash = await sessionStorage.GetAsync<string>("FlashMessage");
+            if (flash.Success && !string.IsNullOrEmpty(flash.Value))
+            {
+                flashMessage = flash.Value;
+                await sessionStorage.DeleteAsync("FlashMessage");   // show only once
+                _ = HideFlashAsync();
+            }
         }
         else
         {
-            NavManager.NavigateTo("/");
+            NavManager.NavigateTo("");
         }
-        base.OnInitialized();
+    }
+
+    private async Task HideFlashAsync()
+    {
+        await Task.Delay(4000);
+        flashMessage = "";
+        await InvokeAsync(StateHasChanged);
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -1156,7 +3579,22 @@
         if (firstRender)
         {
             await js.InvokeVoidAsync("registerDropdownClickHandler", DotNetObjectReference.Create(this));
-            // Render previews for all charts
+
+            // favorites live in the browser, so load them once JS is available
+            if (UserId != "" && UserId != "0")
+            {
+                try
+                {
+                    var saved = await js.InvokeAsync<string[]>("sqLoadFavorites", UserId);
+                    favorites = new HashSet<string>(saved ?? Array.Empty<string>());
+                    StateHasChanged();
+                }
+                catch { /* favorites are optional */ }
+            }
+        }
+
+        if (Charts != null && Charts.Tables.Count > 0 && Charts.Tables[0].Rows.Count > 0)
+        {
             await js.InvokeVoidAsync("renderAllPreviews");
         }
         await base.OnAfterRenderAsync(firstRender);
@@ -1166,14 +3604,61 @@
     public void CloseDropdown()
     {
         showDropdown = false;
+        secretVisible = false;
         StateHasChanged();
     }
 
     private void ToggleDropdown()
     {
         showDropdown = !showDropdown;
+        secretVisible = false;
         StateHasChanged();
     }
+
+    private void SetView(string view)
+    {
+        activeView = view;
+        showDropdown = false;
+        secretVisible = false;
+    }
+
+    private void ShowAllCharts()
+    {
+        searchText = "";
+        chartFilter = "all";
+        SetView("charts");
+    }
+
+    private async Task ToggleFavorite(string chartId)
+    {
+        if (!favorites.Add(chartId)) favorites.Remove(chartId);
+        await js.InvokeVoidAsync("sqSaveFavorites", UserId, favorites.ToArray());
+    }
+
+    // Shows the first date-like column it finds; hidden if the table has none of these.
+    private static readonly string[] DateColumns =
+    {
+        "updated_on", "modified_on", "updated_date", "modified_date", "updated_at", "last_modified",
+        "created_on", "created_date", "created_at", "date_created", "chart_date", "chart_created_on"
+    };
+
+    private static string ChartDate(DataRow row)
+    {
+        foreach (var col in DateColumns)
+        {
+            if (!row.Table.Columns.Contains(col) || row[col] == DBNull.Value) continue;
+            DateTime d;
+            if (row[col] is DateTime dt) d = dt;
+            else if (!DateTime.TryParse(row[col].ToString(), out d)) continue;
+            return d.ToString("MMM d, yyyy, hh:mm tt", System.Globalization.CultureInfo.InvariantCulture);
+        }
+        return "";
+    }
+
+    private static string MaskKey(string key) =>
+        string.IsNullOrEmpty(key) || key.Length < 9
+            ? "••••••••••••"
+            : key[..4] + new string('•', 12) + key[^4..];
 
     public void GetAllCharts()
     {
@@ -1187,7 +3672,6 @@
         objChart.GetChartCategory(vncParams, ref ds);
         if (ds != null)
         {
-            // Ensure chart_json is included in the dataset (modify backend to return it)
             Charts = ds;
         }
     }
@@ -1195,15 +3679,11 @@
     private void SelectChart(string chartId)
     {
         SelectedChartId = chartId;
-       // NavManager.NavigateTo("chartdetails/" + chartId);
-        //GetChartInfo(chartId);
     }
 
     private void CreateChart() => NavManager.NavigateTo("index/0");
 
     private void EditChart(string chartId) => NavManager.NavigateTo("index/" + chartId);
-
-    private void DeleteChart(string chartId) => Console.WriteLine($"Delete {chartId}");
 
     private void GetUserKeys()
     {
@@ -1223,14 +3703,13 @@
             SecretKey = dr["secret_key"].ToString();
             UserName = dr["user_name"].ToString();
         }
-        StateHasChanged();
     }
 
     private async Task Logout()
     {
         showDropdown = false;
+        secretVisible = false;
         await sessionStorage.SetAsync("UserId", "0");
-        //NavManager.NavigateTo("/");
         NavManager.NavigateTo(NavManager.BaseUri, true);
     }
 
@@ -1253,6 +3732,12 @@
             SecretCopied = false;
             StateHasChanged();
         }
+        else if (copiedType == "Share")
+        {
+            flashMessage = "Share link copied";
+            StateHasChanged();
+            _ = HideFlashAsync();
+        }
         else if (copiedType == "Chartkey")
         {
             ChartKeyCopied = chartId;
@@ -1262,371 +3747,234 @@
             StateHasChanged();
         }
     }
-
-    private void GetChartInfo(string chart_id)
-    {
-        cdlChart objchart = new cdlChart();
-        DataSet ds = new DataSet();
-        NameValueCollection vncParams = new NameValueCollection();
-        vncParams.Add("chart_id", chart_id);
-        vncParams.Add("log_id", "0");
-        vncParams.Add("chart_key", "");
-        vncParams.Add("option", "");
-        objchart.GetChartCategory(vncParams, ref ds);
-        if (ds != null && ds.Tables[0].Rows.Count > 0)
-        {
-            DataRow dr = ds.Tables[0].Rows[0];
-            ChartName = dr["chart_title"].ToString();
-            ChartKey = dr["chart_key"].ToString();
-        }
-        StateHasChanged();
-    }
 }
 
 <script>
-    // ─── DROPDOWN CLICK OUTSIDE ───
-    window.registerDropdownClickHandler = function(dotNetRef) {
-        document.addEventListener('click', function(event) {
+    window.registerDropdownClickHandler = function (dotNetRef) {
+        document.addEventListener('click', function (event) {
             var dropdown = document.querySelector('.avatar-wrapper');
             if (dropdown && !dropdown.contains(event.target)) {
                 dotNetRef.invokeMethodAsync('CloseDropdown');
             }
         });
     };
-        window.renderAllPreviews = function() {
-        var cards = document.querySelectorAll('.terracotta-row-card');
-        cards.forEach(function(card) {
-            var container = card.querySelector('.chart-preview-container');
-            var canvasEl = container?.querySelector('canvas');
-            var placeholder = container?.querySelector('.preview-placeholder');
-            var jsonData = card.getAttribute('data-chart-json');
 
-            // If no JSON, show placeholder
-            if (!jsonData || jsonData === '' || jsonData === 'null' || jsonData === 'undefined') {
-                if (placeholder) {
-                    placeholder.style.display = 'flex';
-                    placeholder.innerHTML = '<i class="fa-solid fa-image" style="font-size:18px;color:#a48d7a;"></i>';
+    window.CopyText = function (text) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text);
+        } else {
+            var textarea = document.createElement("textarea");
+            textarea.value = text;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand("copy");
+            document.body.removeChild(textarea);
+        }
+    };
+
+    /* ─── favorites (per user, stored in this browser) ─── */
+    window.sqLoadFavorites = function (userId) {
+        try { return JSON.parse(localStorage.getItem('sq-favs-' + userId) || '[]'); }
+        catch (e) { return []; }
+    };
+
+    window.sqSaveFavorites = function (userId, ids) {
+        try { localStorage.setItem('sq-favs-' + userId, JSON.stringify(ids)); } catch (e) { }
+    };
+
+    /* ─── chart previews (plain canvas, no Fabric) ─── */
+    window.sqHash = function (str) {
+        var h = 5381;
+        for (var i = 0; i < str.length; i++) { h = ((h << 5) + h + str.charCodeAt(i)) | 0; }
+        return h;
+    };
+
+    window.sqAlpha = function (c, a) {
+        return /^#[0-9a-f]{6}$/i.test(c || '') ? c + a : c;
+    };
+
+    window.sqBuildPrims = function (shapes, cats) {
+        var prims = [];
+        var catColor = function (id) {
+            var c = cats.find(function (x) { return x.id === id; });
+            return c && c.color ? c.color : '#c9694b';
+        };
+
+        shapes.forEach(function (s) {
+            var c = catColor(s.cat);
+            var rot = s.rot || 0;
+            var rad = rot * Math.PI / 180;
+
+            if (s.type === 'row') {
+                var count = s.count || 1;
+                var x1 = s.x1 || 0, y1 = s.y1 || 0;
+                var x2 = s.x2 != null ? s.x2 : 100, y2 = s.y2 != null ? s.y2 : 0;
+                var cx = (x1 + x2) / 2, cy = (y1 + y2) / 2;
+
+                for (var i = 0; i < count; i++) {
+                    var t = count > 1 ? i / (count - 1) : 0;
+                    var px = x1 + (x2 - x1) * t;
+                    var py = y1 + (y2 - y1) * t;
+
+                    if (s.curve) {
+                        var dx = x2 - x1, dy = y2 - y1;
+                        var len = Math.hypot(dx, dy) || 1;
+                        var mx = cx + (-dy / len) * s.curve * 2;
+                        var my = cy + (dx / len) * s.curve * 2;
+                        var u = 1 - t;
+                        px = u * u * x1 + 2 * u * t * mx + t * t * x2;
+                        py = u * u * y1 + 2 * u * t * my + t * t * y2;
+                    }
+                    if (rot) {
+                        var rx = px - cx, ry = py - cy;
+                        px = cx + rx * Math.cos(rad) - ry * Math.sin(rad);
+                        py = cy + rx * Math.sin(rad) + ry * Math.cos(rad);
+                    }
+                    prims.push({ k: 'circle', x: px, y: py, r: 7, fill: c, stroke: '#ffffff', sw: 1.2 });
                 }
-                if (canvasEl) canvasEl.style.display = 'none';
-                return;
             }
-
-            try {
-                var json = JSON.parse(jsonData);
-                if (!json.objects || json.objects.length === 0) {
-                    throw new Error('Empty chart');
+            else if (s.type === 'table') {
+                var radius = s.r || 30;
+                prims.push({ k: 'circle', x: s.x, y: s.y, r: radius, fill: window.sqAlpha(c, '44'), stroke: c, sw: 1.5 });
+                var tCount = s.count || 6;
+                for (var k = 0; k < tCount; k++) {
+                    var a = k / tCount * Math.PI * 2;
+                    prims.push({
+                        k: 'circle',
+                        x: s.x + Math.cos(a) * (radius + 12),
+                        y: s.y + Math.sin(a) * (radius + 12),
+                        r: 6, fill: c, stroke: '#ffffff', sw: 1
+                    });
                 }
-
-                // Prepare the canvas (64x64)
-                canvasEl.width = 64;
-                canvasEl.height = 64;
-                canvasEl.style.display = 'block';
-                if (placeholder) {
-                    placeholder.style.display = 'none';
-                    placeholder.innerHTML = '';
-                }
-
-                // Create a Fabric canvas for preview
-                var fabricCanvas = new fabric.Canvas(canvasEl, {
-                    renderOnAddRemove: false,
-                    selection: false,
-                    hoverCursor: 'default',
-                    enableRetinaScaling: false,
-                    width: 64,
-                    height: 64
-                });
-
-                // ---- Recreate objects manually (like in loadLayout) ----
-                // We copy the logic from your class methods.
-                // Make sure these functions are accessible globally, or inline them here.
-
-                json.objects.forEach(function(objData) {
-                    // Handle shapes (general rectangles, rectangles)
-                    if (objData.objectType === 'genrectangle') {
-                        // You need to implement recreateGeneralRectangleFromData for preview.
-                        // It should add a rectangle to fabricCanvas using objData.
-                        recreateGeneralRectangleForPreview(fabricCanvas, objData);
-                    }
-                    else if (objData.objectType === 'rectangle') {
-                        recreateRectangleForPreview(fabricCanvas, objData);
-                    }
-                    else if (objData.type === "group" && objData.seatId) {
-                        recreateSeatForPreview(fabricCanvas, objData);
-                    }
-                });
-
-                // Handle text labels (row labels and rectangle labels)
-                json.objects.forEach(function(objData) {
-                    if (objData.type === "text" || objData.type === "i-text") {
-                        if (objData.isRowLabel === true) {
-                            recreateRowLabelForPreview(fabricCanvas, objData);
-                        }
-                        else if (objData.isRectangleLabel === true || objData.generalLabel) {
-                            recreateRectangleLabelForPreview(fabricCanvas, objData);
-                        }
-                    }
-                });
-
-                // ---- Fit and center the chart inside 64x64 ----
-                // Reuse your fitAndCenterChart logic (or a scaled-down version)
-                fitAndCenterPreview(fabricCanvas, 64, 64);
-
-                // Render and clean up
-                fabricCanvas.renderAll();
-                // We keep the canvas alive for the preview, so do NOT dispose here.
-
-            } catch (e) {
-                console.warn('Preview error for chart:', card.getAttribute('data-chart-id'), e);
-                if (placeholder) {
-                    placeholder.style.display = 'flex';
-                    placeholder.innerHTML = '<i class="fa-solid fa-image" style="font-size:18px;color:#a48d7a;"></i>';
-                }
-                if (canvasEl) canvasEl.style.display = 'none';
             }
+            else if (s.type === 'rect' || s.type === 'general') {
+                var isRect = s.type === 'rect';
+                var fill = isRect ? '#e6e9f4' : window.sqAlpha(c, '33');
+                var stroke = isRect ? '#b9c1da' : c;
+                var w = s.w || 0, h = s.h || 0;
+
+                if (s.shape === 'circle') {
+                    prims.push({ k: 'ell', x: s.x + w / 2, y: s.y + h / 2, rx: w / 2, ry: h / 2, rot: rad, fill: fill, stroke: stroke, sw: 1.5 });
+                } else {
+                    var corners = [[0, 0], [w, 0], [w, h], [0, h]].map(function (p) {
+                        return [
+                            s.x + p[0] * Math.cos(rad) - p[1] * Math.sin(rad),
+                            s.y + p[0] * Math.sin(rad) + p[1] * Math.cos(rad)
+                        ];
+                    });
+                    prims.push({ k: 'poly', pts: corners, fill: fill, stroke: stroke, sw: 1.5 });
+                }
+            }
+        });
+        return prims;
+    };
+
+    window.renderAllPreviews = function () {
+        requestAnimationFrame(function () {
+            document.querySelectorAll('[data-chart-json]').forEach(function (card) {
+                var container = card.querySelector('.chart-preview-container, .sq-recent-thumb');
+                if (!container) return;
+                var canvas = container.querySelector('canvas');
+                var placeholder = container.querySelector('.preview-placeholder, .sq-recent-fallback');
+                if (!canvas) return;
+
+                var showPlaceholder = function () {
+                    if (placeholder) placeholder.style.display = placeholder.classList.contains('sq-recent-fallback') ? 'block' : 'flex';
+                    canvas.style.display = 'none';
+                    canvas.dataset.sig = '';
+                };
+
+                var json = card.getAttribute('data-chart-json');
+                if (!json || json === 'null' || json === 'undefined') { showPlaceholder(); return; }
+
+                var box = container.getBoundingClientRect();
+                var w = Math.round(box.width), h = Math.round(box.height);
+                if (w < 2 || h < 2) return;
+
+                var pill = container.querySelector('.sq-stage-pill');
+                var hasPill = !!pill && getComputedStyle(pill).display !== 'none';
+                var sig = w + 'x' + h + ':' + (hasPill ? 'p' : 'n') + ':' + json.length + ':' + window.sqHash(json);
+                if (canvas.dataset.sig === sig) return;   // already drawn at this size
+
+                try {
+                    var data = JSON.parse(json);
+                    var shapes = data.shapes || data.objects || [];
+                    var cats = data.cats || [];
+                    if (!shapes.length) throw new Error('Empty chart');
+
+                    var prims = window.sqBuildPrims(shapes, cats);
+                    if (!prims.length) throw new Error('Nothing to draw');
+
+                    var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+                    var grow = function (x0, y0, x1, y1) {
+                        if (x0 < minX) minX = x0;
+                        if (y0 < minY) minY = y0;
+                        if (x1 > maxX) maxX = x1;
+                        if (y1 > maxY) maxY = y1;
+                    };
+                    prims.forEach(function (p) {
+                        var m = (p.sw || 0) / 2;
+                        if (p.k === 'circle') {
+                            grow(p.x - p.r - m, p.y - p.r - m, p.x + p.r + m, p.y + p.r + m);
+                        } else if (p.k === 'ell') {
+                            var hx = Math.sqrt(Math.pow(p.rx * Math.cos(p.rot), 2) + Math.pow(p.ry * Math.sin(p.rot), 2));
+                            var hy = Math.sqrt(Math.pow(p.rx * Math.sin(p.rot), 2) + Math.pow(p.ry * Math.cos(p.rot), 2));
+                            grow(p.x - hx - m, p.y - hy - m, p.x + hx + m, p.y + hy + m);
+                        } else {
+                            p.pts.forEach(function (pt) { grow(pt[0] - m, pt[1] - m, pt[0] + m, pt[1] + m); });
+                        }
+                    });
+
+                    var dpr = window.devicePixelRatio || 1;
+                    canvas.width = Math.round(w * dpr);
+                    canvas.height = Math.round(h * dpr);
+                    var ctx = canvas.getContext('2d');
+                    ctx.setTransform(1, 0, 0, 1, 0, 0);
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                    var pad = Math.min(w, h) * 0.12;
+                    var topPad = hasPill ? h * 0.2 : pad;
+                    var bw = Math.max(maxX - minX, 1), bh = Math.max(maxY - minY, 1);
+                    var scale = Math.min((w - pad * 2) / bw, (h - topPad - pad) / bh);
+                    var ox = (w - bw * scale) / 2 - minX * scale;
+                    var oy = topPad + (h - topPad - pad - bh * scale) / 2 - minY * scale;
+                    ctx.setTransform(dpr * scale, 0, 0, dpr * scale, dpr * ox, dpr * oy);
+
+                    prims.forEach(function (p) {
+                        ctx.beginPath();
+                        if (p.k === 'circle') {
+                            ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+                        } else if (p.k === 'ell') {
+                            ctx.ellipse(p.x, p.y, p.rx, p.ry, p.rot, 0, Math.PI * 2);
+                        } else {
+                            p.pts.forEach(function (pt, i) { i ? ctx.lineTo(pt[0], pt[1]) : ctx.moveTo(pt[0], pt[1]); });
+                            ctx.closePath();
+                        }
+                        ctx.fillStyle = p.fill;
+                        ctx.fill();
+                        ctx.lineWidth = p.sw;
+                        ctx.strokeStyle = p.stroke;
+                        ctx.stroke();
+                    });
+
+                    canvas.style.display = 'block';
+                    if (placeholder) placeholder.style.display = 'none';
+                    canvas.dataset.sig = sig;
+                } catch (e) {
+                    console.warn('Preview error for chart:', card.getAttribute('data-chart-id'), e);
+                    showPlaceholder();
+                }
+            });
         });
     };
 
-    // ---- Helper functions for preview (copy from your class and adapt) ----
-
-    function recreateGeneralRectangleForPreview(canvas, objData) {
-        // Similar to your recreateGeneralRectangleFromData but simplified for preview
-        const rect = new fabric.Rect({
-            left: objData.left || 0,
-            top: objData.top || 0,
-            width: objData.width || 40,
-            height: objData.height || 40,
-            fill: objData.fill || '#cccccc',
-            stroke: objData.stroke || '#000000',
-            strokeWidth: objData.strokeWidth || 1,
-            originX: objData.originX || 'left',
-            originY: objData.originY || 'top',
-            selectable: false,
-            evented: false
-        });
-        canvas.add(rect);
-    }
-
-    function recreateRectangleForPreview(canvas, objData) {
-        // Same as above, adjust properties as needed
-        const rect = new fabric.Rect({
-            left: objData.left || 0,
-            top: objData.top || 0,
-            width: objData.width || 40,
-            height: objData.height || 40,
-            fill: objData.fill || '#cccccc',
-            stroke: objData.stroke || '#000000',
-            strokeWidth: objData.strokeWidth || 1,
-            originX: objData.originX || 'left',
-            originY: objData.originY || 'top',
-            selectable: false,
-            evented: false
-        });
-        canvas.add(rect);
-    }
-
-    function recreateSeatForPreview(canvas, objData) {
-        const radius = 8; // adjust for preview (maybe smaller)
-        const circle = new fabric.Circle({
-            radius: radius,
-            fill: objData.categoryId || 'white',
-            stroke: objData.categoryId || 'black',
-            strokeWidth: objData.strokeWidth || 1,
-            originX: 'center',
-            originY: 'center',
-            selectable: false,
-            evented: false
-        });
-        const text = new fabric.Text(objData.seatLabel || '', {
-            fontSize: 6, // smaller for preview
-            fontWeight: 'bold',
-            fill: 'white',
-            originX: 'center',
-            originY: 'center',
-            selectable: false,
-            evented: false
-        });
-        const seatGroup = new fabric.Group([circle, text], {
-            left: objData.left || 0,
-            top: objData.top || 0,
-            originX: 'center',
-            originY: 'center',
-            selectable: false,
-            evented: false
-        });
-        canvas.add(seatGroup);
-    }
-
-    function recreateRowLabelForPreview(canvas, objData) {
-        const text = new fabric.Text(objData.text || objData.rowLabel || '', {
-            left: objData.left || 0,
-            top: objData.top || 0,
-            fontSize: Math.min(objData.fontSize || 10, 12),
-            fontWeight: objData.fontWeight || 'normal',
-            fill: objData.fill || 'black',
-            originX: objData.originX || 'center',
-            originY: objData.originY || 'center',
-            selectable: false,
-            evented: false
-        });
-        canvas.add(text);
-    }
-
-    function recreateRectangleLabelForPreview(canvas, objData) {
-        const text = new fabric.Text(objData.text || '', {
-            left: objData.left || 0,
-            top: objData.top || 0,
-            fontSize: Math.min(objData.fontSize || 10, 12),
-            fontWeight: objData.fontWeight || 'normal',
-            fill: objData.fill || 'black',
-            originX: objData.originX || 'center',
-            originY: objData.originY || 'center',
-            selectable: false,
-            evented: false
-        });
-        canvas.add(text);
-    }
-
-    function fitAndCenterPreview(canvas, targetWidth, targetHeight) {
-        // Calculate bounding box of all objects
-        var objects = canvas.getObjects();
-        if (objects.length === 0) return;
-
-        var rect = canvas.getObjects().reduce(function(acc, obj) {
-            var bounds = obj.getBoundingRect();
-            if (!acc) return bounds;
-            return {
-                left: Math.min(acc.left, bounds.left),
-                top: Math.min(acc.top, bounds.top),
-                width: Math.max(acc.left + acc.width, bounds.left + bounds.width) - Math.min(acc.left, bounds.left),
-                height: Math.max(acc.top + acc.height, bounds.top + bounds.height) - Math.min(acc.top, bounds.top)
-            };
-        }, null);
-
-        if (!rect || rect.width === 0 || rect.height === 0) return;
-
-        // Compute scale to fit inside target with some margin
-        var scaleX = (targetWidth * 0.9) / rect.width;
-        var scaleY = (targetHeight * 0.9) / rect.height;
-        var scale = Math.min(scaleX, scaleY, 1); // don't enlarge too much if already small
-
-        // Center the group
-        var centerX = targetWidth / 2;
-        var centerY = targetHeight / 2;
-        var groupCenterX = rect.left + rect.width / 2;
-        var groupCenterY = rect.top + rect.height / 2;
-
-        canvas.forEachObject(function(obj) {
-            obj.left = (obj.left - groupCenterX) * scale + centerX;
-            obj.top = (obj.top - groupCenterY) * scale + centerY;
-            obj.scaleX = (obj.scaleX || 1) * scale;
-            obj.scaleY = (obj.scaleY || 1) * scale;
-            obj.setCoords();
+    // redraw crisply when the window (and so the card size) changes
+    if (!window.__sqPreviewResize) {
+        window.__sqPreviewResize = true;
+        var __sqT;
+        window.addEventListener('resize', function () {
+            clearTimeout(__sqT);
+            __sqT = setTimeout(window.renderAllPreviews, 150);
         });
     }
-   
-   
 </script>
-
-@* <script>
-    // ─── DROPDOWN CLICK OUTSIDE ───
-    window.registerDropdownClickHandler = function(dotNetRef) {
-        document.addEventListener('click', function(event) {
-            var dropdown = document.querySelector('.avatar-wrapper');
-            if (dropdown && !dropdown.contains(event.target)) {
-                dotNetRef.invokeMethodAsync('CloseDropdown');
-            }
-        });
-    };
-
-    // ─── COPY TEXT HELPER ───
-    window.CopyText = function(text) {
-        navigator.clipboard.writeText(text);
-    };
-
-    // ─── RENDER ALL CHART PREVIEWS ───
-    window.renderAllPreviews = function() {
-        var cards = document.querySelectorAll('.terracotta-row-card');
-        cards.forEach(function(card) {
-            var container = card.querySelector('.chart-preview-container');
-            var canvas = container?.querySelector('canvas');
-            var placeholder = container?.querySelector('.preview-placeholder');
-            var jsonData = card.getAttribute('data-chart-json');
-
-            // If no JSON data, show a meaningful placeholder
-            if (!jsonData || jsonData === '' || jsonData === 'null' || jsonData === 'undefined') {
-                if (placeholder) {
-                    placeholder.style.display = 'flex';
-                    placeholder.innerHTML = '<i class="fa-solid fa-image" style="font-size:18px;color:#a48d7a;"></i>';
-                }
-                if (canvas) canvas.style.display = 'none';
-                return;
-            }
-
-            try {
-                var json = JSON.parse(jsonData);
-                // Check if it has objects
-                if (!json.objects || json.objects.length === 0) {
-                    throw new Error('Empty chart');
-                }
-
-                // Sanitize text objects to prevent Fabric errors
-                json.objects = json.objects.map(function(obj) {
-                    if (obj.type === 'text' || obj.type === 'i-text' || obj.type === 'textbox') {
-                        if (typeof obj.text !== 'string') obj.text = '';
-                        if (obj.textStyles && typeof obj.textStyles !== 'object') obj.textStyles = {};
-                        if (obj.charSpacing && typeof obj.charSpacing !== 'number') obj.charSpacing = 0;
-                    }
-                    return obj;
-                });
-
-                // Prepare canvas
-                canvas.width = 64;
-                canvas.height = 64;
-                canvas.style.display = 'block';
-                if (placeholder) {
-                    placeholder.style.display = 'none';
-                    placeholder.innerHTML = ''; // clear any old content
-                }
-
-                var fabricCanvas = new fabric.Canvas(canvas, {
-                    renderOnAddRemove: false,
-                    selection: false,
-                    hoverCursor: 'default',
-                    enableRetinaScaling: false,
-                    width: 64,
-                    height: 64
-                });
-
-                fabricCanvas.loadFromJSON(json, function() {
-                    var zoomX = 64 / (fabricCanvas.getWidth() || 1);
-                    var zoomY = 64 / (fabricCanvas.getHeight() || 1);
-                    var zoom = Math.min(zoomX, zoomY) * 0.9;
-                    fabricCanvas.setZoom(zoom);
-                    fabricCanvas.renderAll();
-                    fabricCanvas.dispose();
-                });
-            } catch (e) {
-                console.warn('Preview error for chart:', card.getAttribute('data-chart-id'), e);
-                // Show placeholder on error
-                if (placeholder) {
-                    placeholder.style.display = 'flex';
-                    placeholder.innerHTML = '<i class="fa-solid fa-image" style="font-size:18px;color:#a48d7a;"></i>';
-                }
-                if (canvas) canvas.style.display = 'none';
-            }
-        });
-    };
-
-    // ─── RUN AFTER DOM LOAD ───
-    document.addEventListener('DOMContentLoaded', function() {
-        setTimeout(window.renderAllPreviews, 300);
-    });
-    window.addEventListener('load', function() {
-        setTimeout(window.renderAllPreviews, 400);
-    });
-
-    // Also re-run when Blazor updates (useful after navigation)
-    window.renderPreviewsOnUpdate = function() {
-        setTimeout(window.renderAllPreviews, 200);
-    };
-</script> *@

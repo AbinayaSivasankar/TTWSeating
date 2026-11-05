@@ -76,12 +76,53 @@ namespace SeatingApi.Controllers
         {
             return chartRepository.GetGAAvailCount(chartId, catname);
         }
+
+        [HttpGet("SeatSummary")]
+        public SeatSummaryModal GetSeatSummary(string chartId)
+        {
+            return chartRepository.GetSeatSummary(chartId);
+        }
+
+
+        [HttpGet("SeatSummaryByCategory")]
+        public ChartSeatSummaryModal GetSeatSummaryByCategory(string chartId)
+        {
+            return chartRepository.GetSeatSummaryByCategory(chartId);
+        }
     }
     public class SeatRequest
     {
         public string ChartId { get; set; }
         public string SecretKey { get; set; }
         public string SelectedSeats { get; set; }
+    }
+
+    public class SeatSummaryModal
+    {
+        public string chart_id { get; set; }
+        public int total_seats { get; set; }
+        public int total_booked { get; set; }
+        public int total_available { get; set; }
+        public int total_hold { get; set; }   // optional, useful to have
+    }
+
+    public class CategorySeatSummaryModal
+    {
+        public string cat_name { get; set; }
+        public int total_seats { get; set; }
+        public int total_booked { get; set; }
+        public int total_available { get; set; }
+        public int total_hold { get; set; }   // optional
+    }
+
+    public class ChartSeatSummaryModal
+    {
+        public string chart_id { get; set; }
+        public int total_seats { get; set; }
+        public int total_booked { get; set; }
+        public int total_available { get; set; }
+        public int total_hold { get; set; }   // optional
+        public List<CategorySeatSummaryModal> categories { get; set; } = new List<CategorySeatSummaryModal>();
     }
 }
 

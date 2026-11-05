@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.Primitives;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using SeatingApi.Controllers;
 using SeatingApi.DataLayer;
 using SeatingApi.Model;
 using System.Collections.Specialized;
@@ -363,6 +364,53 @@ namespace SeatingApi.Repository
             int availableCount = ds.Tables[0].AsEnumerable()
                 .Count(row => row["status"].ToString() == "available" || row["status"].ToString() == "Free");
             return availableCount.ToString();
+        }
+
+
+        public SeatSummaryModal GetSeatSummary(string chartId)
+        {
+            var seats = GetSeatDetails(chartId).ToList();
+
+            var summary = new SeatSummaryModal
+            {
+                chart_id = chartId,
+                total_seats = seats.Count,
+                total_booked = seats.Count(s => s.status == "sold"),      // adjust status codes as needed
+                total_available = seats.Count(s => s.status == "available" || s.status == "Free"),   // adjust status codes as needed
+                total_hold = seats.Count(s => s.status == "reserved")         // optional
+            };
+
+            return summary;
+        }
+
+
+        public ChartSeatSummaryModal GetSeatSummaryByCategory(string chartId)
+        {
+            var seats = GetSeatDetails(chartId).ToList();
+
+            var summary = new ChartSeatSummaryModal
+            {
+                chart_id = chartId,
+                total_seats = seats.Count,
+                total_booked = seats.Count(s => s.status == "sold"),      // adjust status codes as needed
+                total_available = seats.Count(s => s.status == "available" || s.status == "Free"),
+                total_hold = seats.Count(s => s.status == "reserved")
+            };
+
+            summary.categories = seats
+                .GroupBy(s => s.cat_name)
+                .Select(g => new CategorySeatSummaryModal
+                {
+                    cat_name = g.Key,
+                    total_seats = g.Count(),
+                    total_booked = g.Count(s => s.status == "sold"),
+                    total_available = g.Count(s => s.status == "available"),
+                    total_hold = g.Count(s => s.status == "reserved")
+                })
+                .OrderBy(c => c.cat_name)
+                .ToList();
+
+            return summary;
         }
     }
 

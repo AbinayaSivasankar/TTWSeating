@@ -6,36 +6,35 @@
 @using System.Net.Mail
 
 <style>
-    /* ─── ROOT VARIABLES (Terracotta Theme) ─── */
     :root {
-        --bg-body: #f7f2eb;
-        --bg-surface: #fefcf8;
-        --bg-card: #ffffff;
-        --bg-elevated: #f5ede4;
-        --bg-hover: #f0e6da;
-        --bg-active: #e8d9c9;
-        --border-subtle: #e5d6c6;
-        --border-medium: #d4c0ab;
-        --border-strong: #bfa692;
-        --text-primary: #3a2c24;
-        --text-secondary: #6b5747;
-        --text-muted: #a48d7a;
-        --text-inverse: #ffffff;
-        --accent-1: #c9694b;
-        --accent-1-dark: #a84f34;
-        --accent-1-light: #e8a187;
-        --accent-1-glow: rgba(201, 105, 75, 0.20);
-        --accent-2: #d99b7a;
-        --accent-success: #6b8f71;
-        --accent-danger: #c05a4a;
+        --bg-body: var(--color-bg);
+        --bg-surface: var(--color-surface);
+        --bg-card: var(--color-surface);
+        --bg-elevated: var(--color-bg);
+        --bg-hover: var(--color-primary-soft);
+        --bg-active: var(--color-primary-soft);
+        --border-subtle: var(--color-border);
+        --border-medium: var(--color-border);
+        --border-strong: var(--color-text-muted);
+        --text-primary: var(--color-text);
+        --text-secondary: var(--color-text-muted);
+        --text-muted: var(--color-text-muted);
+        --text-inverse: var(--color-on-primary);
+        --accent-1: var(--color-primary);
+        --accent-1-dark: var(--color-primary-hover);
+        --accent-1-light: var(--color-primary-soft);
+        --accent-1-glow: color-mix(in srgb, var(--color-primary) 20%, transparent);
+        --accent-2: var(--color-primary-hover);
+        --accent-success: var(--color-success);
+        --accent-danger: var(--color-danger);
         --radius-sm: 6px;
         --radius-md: 10px;
         --radius-lg: 16px;
         --radius-xl: 20px;
         --radius-full: 9999px;
-        --shadow-card: 0 2px 16px rgba(90, 60, 40, 0.06), 0 1px 3px rgba(90, 60, 40, 0.03);
-        --shadow-elevated: 0 8px 32px rgba(90, 60, 40, 0.08);
-        --shadow-glow: 0 0 30px rgba(201, 105, 75, 0.12);
+        --shadow-card: var(--shadow-card);
+        --shadow-elevated: 0 8px 32px rgba(15, 23, 42, 0.12);
+        --shadow-glow: 0 0 30px color-mix(in srgb, var(--color-primary) 12%, transparent);
         --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         --transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
     }
@@ -106,25 +105,12 @@
             pointer-events: none;
         }
 
-        .login-left .brand-icon {
-            font-size: 48px;
+        .login-left .brand-logo {
+            display: block;
+            width: min(100%, 300px);
+            height: auto;
             margin-bottom: 20px;
-            background: rgba(255,255,255,0.15);
-            width: 72px;
-            height: 72px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: var(--radius-lg);
-            backdrop-filter: blur(4px);
-            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-        }
-
-        .login-left h1 {
-            font-size: 36px;
-            font-weight: 700;
-            margin: 0 0 8px 0;
-            letter-spacing: -0.02em;
+            object-fit: contain;
         }
 
         .login-left .subtitle {
@@ -186,7 +172,7 @@
         margin-bottom: 22px;
         border-radius: var(--radius-md);
         background: var(--accent-1-glow);
-        border: 1px solid rgba(201, 105, 75, 0.15);
+        border: 1px solid color-mix(in srgb, var(--color-primary) 15%, transparent);
         animation: fadeSlideIn 0.4s ease;
     }
 
@@ -384,7 +370,7 @@
             align-items: center;
         }
 
-            .login-left .brand-icon {
+            .login-left .brand-logo {
                 margin: 0 auto 16px;
             }
 
@@ -404,10 +390,6 @@
     }
 
     @@media (max-width: 480px) {
-        .login-left h1 {
-            font-size: 28px;
-        }
-
         .login-left .subtitle {
             font-size: 14px;
         }
@@ -427,10 +409,7 @@
 
     <!-- LEFT PANEL -->
     <div class="login-left">
-        <div class="brand-icon">
-            <i class="fa-solid fa-couch"></i>
-        </div>
-        <h1>SeatsQ</h1>
+        <img class="brand-logo" src="images/seatsq-logo.png" alt="SeatsQ" />
         <p class="subtitle">Design and manage your seating layouts with ease. Smart, simple, and beautiful.</p>
         <div class="features">
             <div class="feature-item">
