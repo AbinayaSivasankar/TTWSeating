@@ -1,8 +1,10 @@
 ﻿@page "/chartdetails/{ChartId}"
+@attribute [Authorize]
 @using System.Collections.Specialized;
 @using System.Data;
 @using DataLayer;
 @using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
+@using TTWSeating.Authentication
 
 <style>
     /* ─── ROOT VARIABLES (Terracotta Theme) ─── */
@@ -647,13 +649,13 @@
     [Inject]
     NavigationManager NavManager { get; set; }
     [Inject]
-    ProtectedSessionStorage sessionStorage { get; set; }
-    protected override async void OnInitialized()
+    ProtectedLocalStorage localStorage { get; set; }
+    protected override async Task OnInitializedAsync()
     {
-        var result = await sessionStorage.GetAsync<string>("UserEmail");
+        var result = await localStorage.GetAsync<string>("UserEmail");
         if (result.Success) UserEmail = result.Value;
 
-        var userIdResult = await sessionStorage.GetAsync<string>("UserId");
+        var userIdResult = await localStorage.GetAsync<string>("UserId");
         UserId = userIdResult.Value;
         if (UserId != "" && UserId != "0")
         {

@@ -9653,7 +9653,7 @@ async function getAvailableCount(chartId, categoryName) {
     };
     const SN = { wheelchair: 'Wheelchair space', companion: 'Companion seat', accessible: 'Accessible seat', hear: 'Hearing impaired', cart: 'CART services', sign: 'Sign language interpretation', res: 'Restricted view', ver: 'Not suitable for vertigo sufferers', leg: 'Limited legroom', arm: 'Lift-up armrests' };
     const FLAGS = ['hear', 'res', 'ver', 'leg', 'arm'];
-    const seatAccNotes = sd => [sd.acc && SN[sd.acc]].concat(FLAGS.filter(k => sd[k]).map(k => SN[k]), sd.hear && sd.cart ? [SN.cart] : [], sd.hear && sd.sign ? [SN.sign] : []).flat().filter(Boolean);
+    const seatAccNotes = sd => [...new Set([sd.acc, ...FLAGS.filter(k => sd[k]), ...(sd.hear && sd.cart ? ['cart'] : []), ...(sd.hear && sd.sign ? ['sign'] : [])].filter(k => k && SN[k]))].map(key => ({ key, label: SN[key] }));
     const svgEl = (name, attrs, parent) => { const n = document.createElementNS(NS, name); Object.entries(attrs || {}).forEach(([k, v]) => { if (v !== undefined && v !== null) n.setAttribute(k, String(v)) }); if (parent) parent.appendChild(n); return n; };
     const text = (parent, x, y, str, attrs = {}) => { const n = svgEl('text', { x, y, 'dominant-baseline': 'auto', ...attrs }, parent); n.textContent = str == null ? '' : String(str); return n; };
     const catMap = (cats, id) => cats.find(c => String(c.id) === String(id)) || { color: '#888', name: '—' };
@@ -9661,34 +9661,156 @@ async function getAvailableCount(chartId, categoryName) {
     function polySeats(pts, n) { const seg = [], lens = []; let total = 0; for (let i = 1; i < pts.length; i++) { const l = Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y); seg.push(l); total += l } const count = n ?? Math.floor(total / SP) + 1, out = []; let si = 0, acc = 0; for (let i = 0; i < count; i++) { const d = i * SP; while (si < seg.length - 1 && d > acc + seg[si]) { acc += seg[si]; si++ } const a = pts[si], b = pts[si + 1] || pts[si], l = seg[si] || 1, t = (d - acc) / l; out.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }) } return out; }
     function rowSeats(s) { if (s.pts) return { p: polySeats(s.pts, s.count).map((p, i) => ({ ...p, l: seatNo(s.start, s.dir === 'rtl' ? s.count - 1 - i : i) })), cx: 0, cy: 0 }; const dx = s.x2 - s.x1, dy = s.y2 - s.y1, len = Math.hypot(dx, dy) || 1, mx = (s.x1 + s.x2) / 2 + (-dy / len) * (s.curve || 0) * 2, my = (s.y1 + s.y2) / 2 + (dx / len) * (s.curve || 0) * 2, p = []; for (let i = 0; i < s.count; i++) { const t = s.count > 1 ? i / (s.count - 1) : 0, u = 1 - t, k = s.dir === 'rtl' ? s.count - 1 - i : i; p.push({ x: u * u * s.x1 + 2 * u * t * mx + t * t * s.x2, y: u * u * s.y1 + 2 * u * t * my + t * t * s.y2, l: seatNo(s.start, k) }) } return { p, cx: mx, cy: my }; }
     function tableSeats(s) { const out = []; if (s.shape === 'rect') { const top = Math.ceil(s.count / 2), bot = s.count - top;[[top, -1], [bot, 1]].forEach(([n, dir]) => { for (let i = 0; i < n; i++)if (n) out.push({ x: s.x - s.w / 2 + (i + .5) * s.w / n, y: s.y + dir * (s.h / 2 + R + 4) }) }) } else for (let i = 0; i < s.count; i++) { const a = i / s.count * Math.PI * 2; out.push({ x: s.x + Math.cos(a) * (s.r + R + 4), y: s.y + Math.sin(a) * (s.r + R + 4) }) } return out; }
-    function bounds(s) { if (s.type === 'row') { const p = rowSeats(s).p; const xs = p.map(q => q.x), ys = p.map(q => q.y); return { x: Math.min(...xs) - R - 24, y: Math.min(...ys) - R, w: Math.max(...xs) - Math.min(...xs) + 2 * R + 24, h: Math.max(...ys) - Math.min(...ys) + 2 * R } } if (s.type === 'table') return s.shape === 'rect' ? { x: s.x - s.w / 2 - R - 8, y: s.y - s.h / 2 - R - 8, w: s.w + 2 * R + 16, h: s.h + 2 * R + 16 } : { x: s.x - s.r - R - 8, y: s.y - s.r - R - 8, w: 2 * (s.r + R + 8), h: 2 * (s.r + R + 8) }; if (s.type === 'icon') return { x: s.x - s.size / 2, y: s.y - s.size / 2, w: s.size, h: s.size }; if (s.type === 'line') return { x: Math.min(s.x1, s.x2) - 6, y: Math.min(s.y1, s.y2) - 6, w: Math.abs(s.x2 - s.x1) + 12, h: Math.abs(s.y2 - s.y1) + 12 }; if (s.type === 'focal') return { x: s.x - 20, y: s.y - 20, w: 40, h: 40 }; if (s.type === 'text') return { x: s.x, y: s.y - s.size, w: (s.text || 'Text').length * s.size * .6, h: s.size * 1.3 }; if (s.pts) { const xs = s.pts.map(p => p.x), ys = s.pts.map(p => p.y); return { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) } } return { x: s.x, y: s.y, w: s.w, h: s.h }; }
+    function bounds(s) { if (s.type === 'row') { const p = rowSeats(s).p; const xs = p.map(q => q.x), ys = p.map(q => q.y); return { x: Math.min(...xs) - R - 24, y: Math.min(...ys) - R, w: Math.max(...xs) - Math.min(...xs) + 2 * R + 24, h: Math.max(...ys) - Math.min(...ys) + 2 * R } } if (s.type === 'table') return s.shape === 'rect' ? { x: s.x - s.w / 2 - R - 8, y: s.y - s.h / 2 - R - 8, w: s.w + 2 * R + 16, h: s.h + 2 * R + 16 } : { x: s.x - s.r - R - 8, y: s.y - s.r - R - 8, w: 2 * (s.r + R + 8), h: 2 * (s.r + R + 8) }; if (s.type === 'icon') return { x: s.x - s.size / 2, y: s.y - s.size / 2, w: s.size, h: s.size }; if (s.type === 'line') return { x: Math.min(s.x1, s.x2) - 6, y: Math.min(s.y1, s.y2) - 6, w: Math.abs(s.x2 - s.x1) + 12, h: Math.abs(s.y2 - s.y1) + 12 }; if (s.type === 'text') return { x: s.x, y: s.y - s.size, w: (s.text || 'Text').length * s.size * .6, h: s.size * 1.3 }; if (s.pts) { const xs = s.pts.map(p => p.x), ys = s.pts.map(p => p.y); return { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) } } return { x: s.x, y: s.y, w: s.w, h: s.h }; }
     function center(s) { const b = bounds(s); return { x: b.x + b.w / 2, y: b.y + b.h / 2 }; }
     function render(containerId, chartJson, seatsJson) {
-        lastRender = { containerId, chartJson, seatsJson }; const host = document.getElementById(containerId); if (!host) return; let data; try { data = typeof chartJson === 'string' ? JSON.parse(chartJson) : chartJson } catch (e) { console.error('Invalid chart JSON', e); return } const shapes = data.shapes || [], cats = data.cats || []; let seatRows = []; try { seatRows = typeof seatsJson === 'string' ? JSON.parse(seatsJson || '[]') : (seatsJson || []) } catch { } if (!Array.isArray(seatRows)) seatRows = seatRows?.Tables?.[0]?.Rows || [];
+        lastRender = { containerId, chartJson, seatsJson }; const host = document.getElementById(containerId); if (!host) return; let data; try { data = typeof chartJson === 'string' ? JSON.parse(chartJson) : chartJson } catch (e) { console.error('Invalid chart JSON', e); return } const shapes = (data.shapes || []).filter(s => s.type !== 'focal'), cats = data.cats || []; let seatRows = []; try { seatRows = typeof seatsJson === 'string' ? JSON.parse(seatsJson || '[]') : (seatsJson || []) } catch { } if (!Array.isArray(seatRows)) seatRows = seatRows?.Tables?.[0]?.Rows || [];
         host.innerHTML = ''; host.style.position = 'relative'; host.style.minHeight = host.style.minHeight || '800px'; host.style.overflow = 'hidden'; host.style.backgroundColor = '#fff'; host.style.backgroundImage = 'radial-gradient(#d7e2f4 1px, transparent 1px)'; host.style.backgroundSize = '20px 20px';
         const all = []; shapes.forEach(s => { const b = bounds(s); all.push(b) }); if (!all.length) return; const minX = Math.min(...all.map(b => b.x)), minY = Math.min(...all.map(b => b.y)), maxX = Math.max(...all.map(b => b.x + b.w)), maxY = Math.max(...all.map(b => b.y + b.h)); const pad = 50, vw = Math.max(1, maxX - minX + pad * 2), vh = Math.max(1, maxY - minY + pad * 2); const svg = svgEl('svg', { viewBox: `${minX - pad} ${minY - pad} ${vw} ${vh}`, width: '100%', height: '800px', preserveAspectRatio: 'xMidYMid meet', role: 'img', 'aria-label': 'Seating chart preview' }, host); svg.style.display = 'block'; svg.style.minHeight = '800px'; svg.style.overflow = 'visible';
         // index seat metadata by row+seat name; category assignments from saved chart data take precedence
         const seatLookup = new Map(); seatRows.forEach(r => seatLookup.set(String(r.seat_name || r.seat || ''), r));
-        shapes.slice().sort((a, b) => (b.type === 'focal') - (a.type === 'focal')).forEach(s => {
+        shapes.forEach(s => {
             const c = catMap(cats, s.cat).color, cc = center(s), g = svgEl('g', { transform: `rotate(${s.rot || 0} ${cc.x} ${cc.y})` }, svg);
             if (s.type === 'row') {
                 const q = rowSeats(s); q.p.forEach((p, i) => {
-                    const sd = (s.sd && s.sd[i]) || {}, seatName = (s.label || '') + '-' + (sd.label || p.l), db = seatLookup.get(seatName), cat = catMap(cats, sd.cat || s.cat), fill = cat.color; const circle = svgEl('circle', { cx: p.x, cy: p.y, r: R, fill, stroke: '#fff', 'stroke-width': 1.5, 'data-seat': seatName, tabindex: 0 }, g); const tip = [`Row: ${s.label || ''}`, `Seat: ${sd.label || p.l}`, `Category: ${cat.name}`, db?.status ? `Status: ${db.status}` : '', ...seatAccNotes(sd)].filter(Boolean).join('\n'); circle.addEventListener('mouseenter', () => showTip(host, tip)); circle.addEventListener('mouseleave', hideTip); circle.addEventListener('focus', () => showTip(host, tip)); circle.addEventListener('blur', hideTip); const hasAcc = sd.acc && SI[sd.acc], fk = FLAGS.filter(k => sd[k]);
+                    const sd = (s.sd && s.sd[i]) || {}, seatName = (s.label || '') + '-' + (sd.label || p.l), db = seatLookup.get(seatName), cat = catMap(cats, sd.cat || s.cat), fill = cat.color, seatLabel = sd.label || p.l; const circle = svgEl('circle', { cx: p.x, cy: p.y, r: R, fill, stroke: '#fff', 'stroke-width': 1.5, 'data-seat': seatName, tabindex: 0, 'aria-label': `Row ${s.label || ''}, seat ${seatLabel}, ${cat.name}${db?.status ? ', ' + db.status : ''}` }, g); const tip = { type: 'Row', section: s.label || s.section || '', seat: seatLabel, category: cat.name, color: cat.color, status: db?.status || '', notes: seatAccNotes(sd) }; circle.addEventListener('mouseenter', e => showTip(host, tip, e)); circle.addEventListener('mouseleave', hideTip); circle.addEventListener('focus', e => showTip(host, tip, e)); circle.addEventListener('blur', hideTip); const hasAcc = sd.acc && SI[sd.acc], fk = FLAGS.filter(k => sd[k]);
                     if (hasAcc) svgEl('g', { style: 'color:#fff', transform: `translate(${p.x - 7} ${p.y - 7}) scale(${14 / 24})`, 'pointer-events': 'none' }, g).innerHTML = SI[sd.acc];
                     else if (showSeats) text(g, p.x, p.y + 3, sd.label || p.l, { 'text-anchor': 'middle', 'font-size': 8, 'font-weight': 600, fill: '#fff', 'pointer-events': 'none' });
                     if (fk.length) { const bx = p.x + R - 1, by = p.y - R + 1; svgEl('circle', { cx: bx, cy: by, r: 5.6, fill: '#f59e0b', stroke: '#fff', 'stroke-width': 1.2, 'pointer-events': 'none' }, g); if (fk.length === 1) svgEl('g', { style: 'color:#fff', transform: `translate(${bx - 3.6} ${by - 3.6}) scale(${7.2 / 24})`, 'pointer-events': 'none' }, g).innerHTML = SI[fk[0]]; else text(g, bx, by + 3, fk.length, { 'text-anchor': 'middle', 'font-size': 8, 'font-weight': 700, fill: '#fff', 'pointer-events': 'none' }); }
                 }); const l = q.p[0].x <= q.p[q.p.length - 1].x ? q.p[0] : q.p[q.p.length - 1]; if (showRows && s.lblOn !== false) text(g, l.x - 22, l.y + 4, s.label, { 'text-anchor': 'middle', 'font-size': 12, 'font-weight': 700, fill: '#64708f' });
             }
-            else if (s.type === 'table') { const tableFill = c + '33', stroke = c; if (s.shape === 'rect') svgEl('rect', { x: s.x - s.w / 2, y: s.y - s.h / 2, width: s.w, height: s.h, rx: 8, fill: tableFill, stroke, 'stroke-width': 1.5 }, g); else svgEl('circle', { cx: s.x, cy: s.y, r: s.r, fill: tableFill, stroke, 'stroke-width': 1.5 }, g); tableSeats(s).forEach((p, i) => { const cat = catMap(cats, s.cat), seatName = (s.label || 'T') + '-' + (i + 1), tip = `Table: ${s.label || ''}\nSeat: ${i + 1}\nCategory: ${cat.name}`; const el = svgEl('circle', { cx: p.x, cy: p.y, r: R, fill: cat.color, stroke: '#fff', 'stroke-width': 1.5, tabindex: 0, 'data-seat': seatName }, g); el.addEventListener('mouseenter', () => showTip(host, tip)); el.addEventListener('mouseleave', hideTip); if (showSeats) text(g, p.x, p.y + 3, String(i + 1), { 'text-anchor': 'middle', 'font-size': 8, 'font-weight': 600, fill: '#fff', 'pointer-events': 'none' }); }); text(g, s.x, s.y + 4, s.label, { 'text-anchor': 'middle', 'font-size': 13, 'font-weight': 700, fill: '#1e2540' }); }
+            else if (s.type === 'table') { const tableFill = c + '33', stroke = c; if (s.shape === 'rect') svgEl('rect', { x: s.x - s.w / 2, y: s.y - s.h / 2, width: s.w, height: s.h, rx: 8, fill: tableFill, stroke, 'stroke-width': 1.5 }, g); else svgEl('circle', { cx: s.x, cy: s.y, r: s.r, fill: tableFill, stroke, 'stroke-width': 1.5 }, g); tableSeats(s).forEach((p, i) => { const cat = catMap(cats, s.cat), seatName = (s.label || 'T') + '-' + (i + 1), db = seatLookup.get(seatName), tip = { type: 'Table', section: s.label || '—', seat: String(i + 1), category: cat.name, color: cat.color, status: db?.status || '', notes: [] }; const el = svgEl('circle', { cx: p.x, cy: p.y, r: R, fill: cat.color, stroke: '#fff', 'stroke-width': 1.5, tabindex: 0, 'data-seat': seatName, 'aria-label': `Table ${s.label || ''}, seat ${i + 1}, ${cat.name}${db?.status ? ', ' + db.status : ''}` }, g); el.addEventListener('mouseenter', e => showTip(host, tip, e)); el.addEventListener('mouseleave', hideTip); el.addEventListener('focus', e => showTip(host, tip, e)); el.addEventListener('blur', hideTip); if (showSeats) text(g, p.x, p.y + 3, String(i + 1), { 'text-anchor': 'middle', 'font-size': 8, 'font-weight': 600, fill: '#fff', 'pointer-events': 'none' }); }); text(g, s.x, s.y + 4, s.label, { 'text-anchor': 'middle', 'font-size': 13, 'font-weight': 700, fill: '#1e2540' }); }
             else if (s.type === 'icon') { const ig = svgEl('g', { transform: `translate(${s.x - s.size / 2} ${s.y - s.size / 2}) scale(${s.size / 24})`, style: `color:${s.color || '#1e2540'}` }, g); ig.innerHTML = ICONS[s.ic] || ''; }
             else if (s.type === 'line') { const dx = s.x2 - s.x1, dy = s.y2 - s.y1, len = Math.hypot(dx, dy) || 1, ux = dx / len, uy = dy / len, hs = 6 + (s.w || 3) * 2; svgEl('line', { x1: s.x1, y1: s.y1, x2: s.arrow ? s.x2 - ux * hs * .6 : s.x2, y2: s.arrow ? s.y2 - uy * hs * .6 : s.y2, stroke: s.color || '#1e2540', 'stroke-width': s.w || 3, 'stroke-dasharray': s.dash || '0' }, g); if (s.arrow) svgEl('polygon', { points: `${s.x2},${s.y2} ${s.x2 - ux * hs - uy * hs * .5},${s.y2 - uy * hs + ux * hs * .5} ${s.x2 - ux * hs + uy * hs * .5},${s.y2 - uy * hs - ux * hs * .5}`, fill: s.color || '#1e2540' }, g); }
             else if (s.type === 'text') text(g, s.x, s.y, s.text || 'Text', { 'font-size': s.size || 18, 'font-weight': 600, fill: s.color || '#1e2540' });
-            else if (s.type === 'focal') { const R0 = s.r || 120, gid = 'chartFocal' + Math.random().toString(36).slice(2, 8), df = svgEl('defs', {}, g), gr = svgEl('radialGradient', { id: gid }, df);[[0, .5], [.45, .3], [.8, .1], [1, 0]].forEach(([o, a]) => svgEl('stop', { offset: o, 'stop-color': '#ef4444', 'stop-opacity': a }, gr)); svgEl('circle', { cx: s.x, cy: s.y, r: R0, fill: `url(#${gid})`, 'pointer-events': 'none' }, g); }
+
             else { const isRect = s.type === 'rect', shape = s.shape || 'rect'; if (shape === 'poly' && s.pts) svgEl('polygon', { points: s.pts.map(p => `${p.x},${p.y}`).join(' '), fill: isRect ? '#e6e9f4' : c + '2a', stroke: isRect ? '#b9c1da' : c, 'stroke-width': 1.5, 'stroke-dasharray': s.type === 'general' ? '7 5' : '0' }, g); else if (shape === 'circle') svgEl('ellipse', { cx: s.x + s.w / 2, cy: s.y + s.h / 2, rx: s.w / 2, ry: s.h / 2, fill: isRect ? '#e6e9f4' : c + '2a', stroke: isRect ? '#b9c1da' : c, 'stroke-width': 1.5, 'stroke-dasharray': s.type === 'general' ? '7 5' : '0' }, g); else svgEl('rect', { x: s.x, y: s.y, width: s.w, height: s.h, rx: 10, fill: isRect ? '#e6e9f4' : c + '2a', stroke: isRect ? '#b9c1da' : c, 'stroke-width': 1.5, 'stroke-dasharray': s.type === 'general' ? '7 5' : '0' }, g); text(g, s.x + s.w / 2, s.y + s.h / 2 + 5, s.label || '', { 'text-anchor': 'middle', 'font-size': 14, 'font-weight': 600, fill: '#1e2540' }); if (s.type === 'general') text(g, s.x + s.w / 2, s.y + s.h / 2 + 23, (s.cap || 0) + ' capacity', { 'text-anchor': 'middle', 'font-size': 11, fill: '#7a85a6' }); }
         });
-        if (!document.getElementById('chartPreviewTooltipStyle')) { const style = document.createElement('style'); style.id = 'chartPreviewTooltipStyle'; style.textContent = '.chart-preview-tip{position:fixed;z-index:99999;display:none;pointer-events:none;white-space:pre-line;background:#202438;color:#fff;padding:7px 10px;border-radius:6px;font:12px/1.45 system-ui,sans-serif;box-shadow:0 4px 16px #0002}'; document.head.appendChild(style) }
+        if (!document.getElementById('chartPreviewTooltipStyle')) {
+            const style = document.createElement('style');
+            style.id = 'chartPreviewTooltipStyle';
+            style.textContent = `
+                .chart-preview-tip{position:fixed;z-index:99999;display:none;pointer-events:none;box-sizing:border-box;width:min(300px,calc(100vw - 24px));min-height:120px;max-height:calc(100vh - 16px);overflow:auto;border:1px solid #e8ebf3;border-radius:14px;background:#fff;color:#202438;font:13px/1.45 system-ui,sans-serif;box-shadow:0 12px 32px #1e254033}
+                .cpt-identity{display:grid;grid-template-columns:1fr 1fr}
+                .cpt-identity-cell{display:flex;min-width:0;min-height:60px;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:8px}
+                .cpt-identity-cell+.cpt-identity-cell{border-left:1px solid #e8ebf3}
+                .cpt-label{color:#929292;font-size:10px;font-weight:700;letter-spacing:.04em;line-height:1.2;text-transform:uppercase}
+                .cpt-value{max-width:100%;overflow:hidden;color:#242424;font-size:24px;font-weight:700;line-height:1.15;text-overflow:ellipsis;white-space:nowrap}
+                .cpt-details{display:grid;grid-template-columns:1fr auto;gap:5px 12px;padding:8px 10px 10px;border-top:1px solid #edf0f5}
+                .cpt-detail-label{color:#7b8294}
+                .cpt-detail-value{color:#30364a;font-weight:650;text-align:right}
+                .cpt-status{padding:2px 8px;border-radius:999px;background:#f1f3f8;color:#50576a;font-size:11px;font-weight:700;text-align:center;text-transform:capitalize}
+                .cpt-status.available{background:#e8f7ef;color:#18794e}
+                .cpt-status.unavailable{background:#fff0ef;color:#b42318}
+                .cpt-accessibility{padding:9px 10px 10px;border-top:1px solid #edf0f5}
+                .cpt-accessibility-heading{display:flex;align-items:center;gap:6px;margin:0 0 6px;color:#68718a;font-size:10px;font-weight:700;letter-spacing:.065em;text-transform:uppercase}
+                .cpt-accessibility-mark{width:6px;height:6px;border-radius:50%;background:#6558d9}
+                .cpt-accessibility-list{display:flex;flex-wrap:wrap;gap:6px}
+                .cpt-accessibility-chip{display:inline-flex;max-width:100%;align-items:center;gap:8px;padding:5px 9px;border:0;border-radius:7px;background:#f5f6fb;color:#35405a;font-size:11px;font-weight:600;line-height:1.3}
+                .cpt-accessibility-chip svg{box-sizing:border-box;width:22px;height:22px;flex:none;padding:4px;border-radius:6px;background:#fff;color:#5145cd}
+                .cpt-accessibility-chip span{overflow-wrap:anywhere}
+            `;
+            document.head.appendChild(style);
+        }
     }
-    function showTip(host, content) { let tip = document.getElementById('chartPreviewTooltip'); if (!tip) { tip = document.createElement('div'); tip.id = 'chartPreviewTooltip'; tip.className = 'chart-preview-tip'; document.body.appendChild(tip) } tip.textContent = content; tip.style.display = 'block'; const move = e => { tip.style.left = (e.clientX + 12) + 'px'; tip.style.top = (e.clientY + 12) + 'px' }; host.onmousemove = move; }
+    function showTip(host, details, event) {
+        let tip = document.getElementById('chartPreviewTooltip');
+        if (!tip) {
+            tip = document.createElement('div');
+            tip.id = 'chartPreviewTooltip';
+            tip.className = 'chart-preview-tip';
+            tip.setAttribute('role', 'tooltip');
+            document.body.appendChild(tip);
+        }
+        tip.replaceChildren();
+        const identity = document.createElement('div');
+        identity.className = 'cpt-identity';
+        const addIdentity = (label, value) => {
+            const cell = document.createElement('div');
+            cell.className = 'cpt-identity-cell';
+            const key = document.createElement('span');
+            key.className = 'cpt-label';
+            key.textContent = label;
+            const val = document.createElement('span');
+            val.className = 'cpt-value';
+            val.style.color = details.color || '#242424';
+            val.textContent = value || '—';
+            cell.append(key, val);
+            identity.appendChild(cell);
+        };
+        addIdentity(details.type === 'Table' ? 'Table' : 'Row', details.section);
+        addIdentity('Seat', details.seat);
+        tip.appendChild(identity);
+
+        const grid = document.createElement('div');
+        grid.className = 'cpt-details';
+        const addDetail = (label, value, status) => {
+            if (!value) return;
+            const key = document.createElement('span');
+            key.className = 'cpt-detail-label';
+            key.textContent = label;
+            const val = document.createElement('span');
+            val.className = status ? 'cpt-status' : 'cpt-detail-value';
+            if (status) {
+                const normalized = value.toLowerCase();
+                if (normalized === 'available') val.classList.add('available');
+                else if (/booked|sold|unavailable|occupied/.test(normalized)) val.classList.add('unavailable');
+            }
+            val.textContent = value;
+            grid.append(key, val);
+        };
+        addDetail('Category', details.category);
+        addDetail('Status', details.status, true);
+        if (grid.childNodes.length) tip.append(grid);
+
+        const notes = (details.notes || []).filter(note => note && note.label);
+        if (notes.length) {
+            const section = document.createElement('section');
+            section.className = 'cpt-accessibility';
+            section.setAttribute('aria-label', 'Accessibility features');
+            const heading = document.createElement('div');
+            heading.className = 'cpt-accessibility-heading';
+            const mark = document.createElement('span');
+            mark.className = 'cpt-accessibility-mark';
+            mark.setAttribute('aria-hidden', 'true');
+            const headingText = document.createElement('span');
+            headingText.textContent = 'Accessibility';
+            heading.append(mark, headingText);
+            section.appendChild(heading);
+
+            const list = document.createElement('div');
+            list.className = 'cpt-accessibility-list';
+            notes.forEach(note => {
+                const chip = document.createElement('span');
+                chip.className = 'cpt-accessibility-chip';
+                const icon = document.createElementNS(NS, 'svg');
+                icon.setAttribute('viewBox', '0 0 24 24');
+                icon.setAttribute('aria-hidden', 'true');
+                icon.innerHTML = SI[note.key] || SI.accessible;
+                const label = document.createElement('span');
+                label.textContent = note.label;
+                chip.append(icon, label);
+                list.appendChild(chip);
+            });
+            section.appendChild(list);
+            tip.appendChild(section);
+        }
+
+        tip.style.display = 'block';
+        const place = e => {
+            const rect = tip.getBoundingClientRect();
+            const anchor = event?.currentTarget?.getBoundingClientRect();
+            const x = e && e.clientX ? e.clientX : anchor ? anchor.left + anchor.width / 2 : 0;
+            const y = e && e.clientY ? e.clientY : anchor ? anchor.top + anchor.height / 2 : 0;
+            let left = x + 14, top = y + 14;
+            if (left + rect.width > window.innerWidth - 8) left = x - rect.width - 14;
+            if (top + rect.height > window.innerHeight - 8) top = y - rect.height - 14;
+            tip.style.left = Math.max(8, Math.min(left, window.innerWidth - rect.width - 8)) + 'px';
+            tip.style.top = Math.max(8, Math.min(top, window.innerHeight - rect.height - 8)) + 'px';
+        };
+        place(event);
+        host.onmousemove = place;
+    }
     function showLoader(id) { const h = document.getElementById(id); if (!h) return; if (!document.getElementById('chartPreviewLoaderStyle')) { const st = document.createElement('style'); st.id = 'chartPreviewLoaderStyle'; st.textContent = '.cp-loader{position:absolute;inset:0;min-height:300px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#fff;font:600 13px system-ui,sans-serif;color:#6b7694}.cp-loader i{width:40px;height:40px;border:4px solid #e4e8f2;border-top-color:#4f46e5;border-radius:50%;animation:cpSpin .8s linear infinite}@keyframes cpSpin{to{transform:rotate(360deg)}}'; document.head.appendChild(st) } h.style.position = 'relative'; hideLoader(id); const l = document.createElement('div'); l.className = 'cp-loader'; l.innerHTML = '<i></i><span>Loading chart…</span>'; h.appendChild(l) }
     function hideLoader(id) { const h = document.getElementById(id); if (h) h.querySelectorAll('.cp-loader').forEach(x => x.remove()) }
     function hideTip() { const t = document.getElementById('chartPreviewTooltip'); if (t) t.style.display = 'none' }

@@ -147,14 +147,16 @@
     [Inject]
     NavigationManager NavManager { get; set; }
     [Inject]
-    ProtectedSessionStorage sessionStorage { get; set; }
+    SessionAuthenticationStateProvider AuthenticationState { get; set; }
+    [Inject]
+    ProtectedLocalStorage localStorage { get; set; }
     string UserEmail = "";
 
     string UserInitial =>!string.IsNullOrWhiteSpace(UserEmail)? UserEmail.Substring(0, 1).ToUpper(): "?";
 
     protected override async Task OnInitializedAsync()
     {
-        var result = await sessionStorage.GetAsync<string>("UserEmail");
+        var result = await localStorage.GetAsync<string>("UserEmail");
 
         if (result.Success)
         {
@@ -163,8 +165,7 @@
     }
     private async Task Logout()
     {
-        await sessionStorage.SetAsync("UserId", "0");
-        await sessionStorage.SetAsync("UserEmail", "");
+        await AuthenticationState.SignOutAsync();
         NavManager.NavigateTo("/");
     }
 

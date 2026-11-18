@@ -1,12 +1,17 @@
 
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
+using TTWSeating.Authentication;
 using TTWSeating.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddRazorPages();
+builder.Services.AddAuthorizationCore();
+builder.Services.AddScoped<SessionAuthenticationStateProvider>();
+builder.Services.AddScoped<Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider>(services =>
+    services.GetRequiredService<SessionAuthenticationStateProvider>());
 builder.Services.AddServerSideBlazor(o => o.DetailedErrors = true)
     .AddHubOptions(o => o.MaximumReceiveMessageSize = 1024 * 1024 * 5);
 

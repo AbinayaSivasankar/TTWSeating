@@ -1,4 +1,5 @@
 @page "/home"
+@attribute [Authorize]
 @using DataLayer;
 @using System.Collections.Specialized
 @using System.Data
@@ -3580,6 +3581,8 @@
 
     [Inject] NavigationManager NavManager { get; set; }
     [Inject] ProtectedSessionStorage sessionStorage { get; set; }
+    [Inject] ProtectedLocalStorage localStorage { get; set; }
+    [Inject] SessionAuthenticationStateProvider AuthenticationState { get; set; }
     [Inject] IJSRuntime js { get; set; }
 
     private string flashMessage = "";
@@ -3597,10 +3600,10 @@
 
     protected override async Task OnInitializedAsync()
     {
-        var result = await sessionStorage.GetAsync<string>("UserEmail");
+        var result = await localStorage.GetAsync<string>("UserEmail");
         if (result.Success) UserEmail = result.Value;
 
-        var userIdResult = await sessionStorage.GetAsync<string>("UserId");
+        var userIdResult = await localStorage.GetAsync<string>("UserId");
         UserId = userIdResult.Value ?? "0";
         if (UserId != "" && UserId != "0")
         {
@@ -3816,7 +3819,7 @@
     {
         showDropdown = false;
         secretVisible = false;
-        await sessionStorage.SetAsync("UserId", "0");
+        await AuthenticationState.SignOutAsync();
         NavManager.NavigateTo(NavManager.BaseUri, true);
     }
 

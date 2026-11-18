@@ -1,4 +1,5 @@
 @page "/index/{ChartID}"
+@attribute [Authorize]
 @implements IAsyncDisposable
 @using System.Collections.Specialized
 @using System.Data
@@ -8,6 +9,8 @@
 @inject NavigationManager NavManager
 @inject IJSRuntime JS
 @inject ProtectedSessionStorage Session
+@inject ProtectedLocalStorage LocalStorage
+@inject SessionAuthenticationStateProvider AuthenticationState
 @inject IWebHostEnvironment Env
 
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
@@ -1236,7 +1239,6 @@
                 <div class="gi">
                     <button class="tl" data-t="rect" title="Rectangle (A)"><i class="fa-regular fa-square"></i>Rect</button>
                     <button class="tl" data-t="text" title="Text (T)"><i class="fa-solid fa-font"></i>Text</button>
-                    <button class="tl" data-t="focal" title="Focal point (P)"><i class="fa-solid fa-crosshairs"></i>Focal</button>
                     <button class="tl" data-t="icon" title="Icon (I) - restroom, stage, exit..."><i class="fa-solid fa-icons"></i>Icon</button>
                     <button class="tl" data-t="line" title="Line (L)"><i class="fa-solid fa-slash"></i><span>Line<i class="fa-solid fa-chevron-down"></i></span></button>
                 </div><span class="cap">SHAPES</span>
@@ -1372,8 +1374,8 @@
         if (!firstRender) return;
         _rendered = true;
 
-        var email = await Session.GetAsync<string>("UserEmail");
-        var uid = await Session.GetAsync<string>("UserId");
+        var email = await LocalStorage.GetAsync<string>("UserEmail");
+        var uid = await LocalStorage.GetAsync<string>("UserId");
         UserEmail = email.Success ? email.Value : "";
         UserId = uid.Success ? uid.Value : "0";
         if (string.IsNullOrEmpty(UserId) || UserId == "0")
@@ -1512,8 +1514,7 @@
     private async Task Logout()
     {
         if (module != null && !await module.InvokeAsync<bool>("canLeave")) return;
-        await Session.DeleteAsync("UserEmail");
-        await Session.DeleteAsync("UserId");
+        await AuthenticationState.SignOutAsync();
         NavManager.NavigateTo("/");
     }
 

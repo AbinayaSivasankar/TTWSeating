@@ -2,7 +2,6 @@
 @using DataLayer;
 @using System.Collections.Specialized
 @using System.Data
-@using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
 @using System.Net.Mail
 
 <style>
@@ -582,10 +581,10 @@
     NavigationManager NavManager { get; set; }
 
     [Inject]
-    ProtectedSessionStorage sessionStorage { get; set; }
+    SessionAuthenticationStateProvider AuthenticationState { get; set; }
 
     [Inject]
-    IJSRuntime js { get; set; }
+    IJSRuntime js { get; set;}
 
     // ─── UI NAVIGATION ───
     private void ShowSignup()
@@ -635,7 +634,7 @@
     }
 
     // ─── LOGIN ───
-    public async void LoginClick()
+    public async Task LoginClick()
     {
         if (string.IsNullOrWhiteSpace(Email))
         {
@@ -663,8 +662,7 @@
         if (ds != null && ds.Tables.Count > 0 && ds.Tables[0].Rows.Count > 0)
         {
             DataRow dr = ds.Tables[0].Rows[0];
-            await sessionStorage.SetAsync("UserId", dr["user_id"].ToString());
-            await sessionStorage.SetAsync("UserEmail", dr["user_email"].ToString());
+            await AuthenticationState.SignInAsync(dr["user_id"].ToString(), dr["user_email"].ToString());
             NavManager.NavigateTo("home");
         }
         else

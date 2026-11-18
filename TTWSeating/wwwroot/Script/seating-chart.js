@@ -26,7 +26,7 @@ window.SeatingChart = class SeatingChart {
 
         try {
             debugger;
-            //{ apiBase: "https://highqcare.com/seating_api/api/chart" } 
+            { apiBase: "https://highqcare.com/seating_api/api/chart" } 
             const baseUrl = this.options.apiBase || "http://localhost:5045/api/chart";
 
             const [response, seatDetailsResponse] = await Promise.all([

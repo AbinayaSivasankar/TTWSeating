@@ -1,0 +1,30 @@
+@inject SessionAuthenticationStateProvider AuthenticationState
+@inject NavigationManager Navigation
+
+@if (!AuthenticationState.IsInitialized)
+{
+    <p>Checking sign-in...</p>
+}
+else
+{
+    <p>Redirecting to sign in...</p>
+}
+
+@code {
+    private bool _initialized;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _initialized)
+        {
+            return;
+        }
+
+        _initialized = true;
+        await AuthenticationState.InitializeAsync();
+        if (!AuthenticationState.IsAuthenticated)
+        {
+            Navigation.NavigateTo("/", replace: true);
+        }
+    }
+}
