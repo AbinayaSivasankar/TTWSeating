@@ -1361,8 +1361,8 @@
     private string ChartJson = "";
     private bool _rendered;
     private bool _busy;
-    public static string ChartKey { get; set; } = "";
-    public static string EventKey { get; set; } = "";
+    private string ChartKey = "";
+    private string EventKey = "";
 
     // The editor DOM is owned by chart-editor.js, so Blazor must not diff it again after the first render.
     protected override bool ShouldRender() => !_rendered;
@@ -1407,6 +1407,10 @@
     // chart_id 0 = new chart. Existing charts must belong to the logged in user.
     private bool LoadChart()
     {
+        ChartTitle = "Untitled chart";
+        ChartJson = "";
+        ChartKey = "";
+        EventKey = "";
         if (ChartID == "0") return true;
         if (!int.TryParse(ChartID, out int id) || id <= 0) return false;
 
@@ -1522,8 +1526,8 @@
         p.Add("chart_json", d.ChartJson);
         p.Add("cat_name", d.CatName);
         p.Add("seats_json", d.SeatsJson);
-        p.Add("chart_key", ChartKey);
-        p.Add("event_key", EventKey);
+        p.Add("chart_key", chartId == "0" ? "" : ChartKey);
+        p.Add("event_key", chartId == "0" ? "" : EventKey);
         p.Add("log_id", UserId);
         return new cdlChart().SaveChart(p);
     }
