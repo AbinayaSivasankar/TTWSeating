@@ -77,6 +77,19 @@ namespace DataLayer
             return cdlBase.ExecuteNonQuery(sqlcmd); ;
         }
 
+        public bool DeleteChart(int chartId, int userId)
+        {
+            using SqlConnection sqlcon = cdlBase.GetSqlConnection();
+            using SqlCommand sqlcmd = new SqlCommand("hq_eventchart_del", sqlcon);
+            sqlcmd.CommandType = CommandType.StoredProcedure;
+            sqlcmd.Parameters.Add("@chart_id", SqlDbType.Int).Value = chartId;
+            sqlcmd.Parameters.Add("@log_id", SqlDbType.Int).Value = userId;
+            SqlParameter deleted = sqlcmd.Parameters.Add("@deleted", SqlDbType.Bit);
+            deleted.Direction = ParameterDirection.Output;
+            sqlcmd.ExecuteNonQuery();
+            return deleted.Value != DBNull.Value && Convert.ToBoolean(deleted.Value);
+        }
+
         public Boolean GetChartCategory(NameValueCollection vncParams, ref DataSet vdsOutput)
         {
             try

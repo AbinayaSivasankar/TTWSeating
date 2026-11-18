@@ -1216,6 +1216,50 @@
             color: #7B1E3A;
         }
 
+    .sq-delete-modal-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 10000;
+        display: grid;
+        place-items: center;
+        padding: 20px;
+        background: rgba(20, 20, 24, .55);
+    }
+
+    .sq-delete-modal {
+        width: min(100%, 420px);
+        padding: 24px;
+        border-radius: 20px;
+        background: #FFF;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, .25);
+    }
+
+    .sq-delete-modal h2 {
+        margin: 0 0 8px;
+        color: #242424;
+        font-size: 20px;
+    }
+
+    .sq-delete-modal p {
+        margin: 0;
+        color: #666;
+        line-height: 1.5;
+        overflow-wrap: anywhere;
+    }
+
+    .sq-delete-modal-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 24px;
+    }
+
+    .sq-delete-modal-actions .sq-delete-confirm {
+        border-color: #b42318;
+        background: #b42318;
+        color: #FFF;
+    }
+
     .sq-empty {
         display: flex;
         flex-direction: column;
@@ -3360,6 +3404,10 @@
                                                             @onclick:stopPropagation="true" @onclick='() => CopyText($"{NavManager.BaseUri}counter/{chartKey}", "Share", chartId)'>
                                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"></path></svg>
                                                     </button>
+                                                    <button type="button" class="sq-btn-out" style="color: #b42318" title="Delete chart" aria-label="Delete chart"
+                                                            @onclick:stopPropagation="true" @onclick="() => DeleteChart(chartId, chartTitle)">
+                                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><path d="m19 6-1 14H6L5 6"></path><path d="M10 11v5M14 11v5"></path></svg>
+                                                    </button>
                                                 </div>
                                             </article>
                                         }
@@ -3458,6 +3506,20 @@
     </div>
 </div>
 
+@if (showDeleteConfirmation)
+{
+    <div class="sq-delete-modal-backdrop" @onclick="CancelDeleteChart">
+        <section class="sq-delete-modal" role="alertdialog" aria-modal="true" aria-labelledby="delete-chart-title" aria-describedby="delete-chart-description" @onclick:stopPropagation="true">
+            <h2 id="delete-chart-title">Delete chart?</h2>
+            <p id="delete-chart-description">Delete “@pendingDeleteChartTitle”? This chart will no longer be available.</p>
+            <div class="sq-delete-modal-actions">
+                <button type="button" class="sq-btn-out" @onclick="CancelDeleteChart">Cancel</button>
+                <button type="button" class="sq-btn-out sq-delete-confirm" @onclick="ConfirmDeleteChart">Delete chart</button>
+            </div>
+        </section>
+    </div>
+}
+
 @code {
     private string UserId { get; set; } = "0";
     private string SelectedChartId;
@@ -3468,6 +3530,9 @@
     private bool isGrid = true;
     private bool showTip = true;
     private bool secretVisible = false;
+    private bool showDeleteConfirmation;
+    private string pendingDeleteChartId = "";
+    private string pendingDeleteChartTitle = "";
     private HashSet<string> favorites = new();
 
     public string ChartId { get; set; } = "0";
@@ -3672,6 +3737,60 @@
     private void CreateChart() => NavManager.NavigateTo("index/0");
 
     private void EditChart(string chartId) => NavManager.NavigateTo("index/" + chartId);
+
+    private void DeleteChart(string chartId, string chartTitle)
+    {
+        if (!int.TryParse(chartId, out var id) || id <= 0 || !int.TryParse(UserId, out var userId) || userId <= 0)
+        {
+            flashMessage = "Unable to delete this chart. Refresh and try again.";
+            return;
+        }
+
+        pendingDeleteChartId = chartId;
+        pendingDeleteChartTitle = chartTitle;
+        showDeleteConfirmation = true;
+    }
+
+    private void CancelDeleteChart()
+    {
+        showDeleteConfirmation = false;
+        pendingDeleteChartId = "";
+        pendingDeleteChartTitle = "";
+    }
+
+    private async Task ConfirmDeleteChart()
+    {
+        if (!int.TryParse(pendingDeleteChartId, out var id) || id <= 0 || !int.TryParse(UserId, out var userId) || userId <= 0)
+        {
+            flashMessage = "Unable to delete this chart. Refresh and try again.";
+            CancelDeleteChart();
+            return;
+        }
+
+        var chartId = pendingDeleteChartId;
+        CancelDeleteChart();
+
+        try
+        {
+            var deleted = new cdlChart().DeleteChart(id, userId);
+            if (!deleted)
+            {
+                flashMessage = "Chart could not be deleted. Refresh and try again.";
+                return;
+            }
+
+            favorites.Remove(chartId);
+            await js.InvokeVoidAsync("sqSaveFavorites", UserId, favorites.ToArray());
+            GetAllCharts();
+            flashMessage = "Chart deleted";
+            _ = HideFlashAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Delete chart failed: {ex}");
+            flashMessage = "Unable to delete the chart right now. Please try again.";
+        }
+    }
 
     private void GetUserKeys()
     {

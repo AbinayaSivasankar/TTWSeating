@@ -30,30 +30,31 @@ SET NOCOUNT ON;
        END 	
 
  ELSE IF @option = 'U'
-       BEGIN
-          SELECT  chart_id,  cat_name, rec_stat,  chart_json, chart_title,   chart_key,    created_by,   event_key
-         FROM  eventchart  
-         Where  created_by= @log_id
-       END 
-       
-ELSE IF @option = 'C'
-       BEGIN
-          SELECT  chart_id,  cat_name, rec_stat,  chart_json, chart_title,   chart_key,    created_by,   event_key
-          FROM  eventchart  
-          Where  chart_key= @chart_key
-       END
-ELSE IF @option = 'S'
+      BEGIN
+         SELECT  chart_id,  cat_name, rec_stat,  chart_json, chart_title,   chart_key,    created_by,   event_key
+         FROM  eventchart
+         WHERE created_by = @log_id AND rec_stat = 'A'
+      END
+
+ ELSE IF @option = 'C'
+      BEGIN
+         SELECT  chart_id,  cat_name, rec_stat,  chart_json, chart_title,   chart_key,    created_by,   event_key
+         FROM  eventchart
+         WHERE chart_key = @chart_key AND rec_stat = 'A'
+      END
+
+ ELSE IF @option = 'S'
        BEGIN
           SELECT  chart_id,  cat_name, e.rec_stat,  chart_json, chart_title,   chart_key,    created_by,  u.secret_key,    event_key
           FROM  eventchart  e
-LEFT OUTER JOIN   user_info u
+          LEFT OUTER JOIN   user_info u
                  ON   u.user_id      =  created_by
-          Where  chart_id= @chart_id
+          Where  chart_id= @chart_id AND e.rec_stat = 'A'
        END
 
 ELSE
        BEGIN
           SELECT  chart_id,  cat_name, rec_stat,  chart_json, chart_title,   chart_key,    created_by,     event_key
          FROM  eventchart  
-         Where chart_id = @chart_id
+         Where chart_id = @chart_id AND rec_stat = 'A'
        END 	

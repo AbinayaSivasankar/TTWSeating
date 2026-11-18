@@ -78,5 +78,6 @@
     <Build Include="StoredProcedures\hq_user_info_sel.sql" />
     <Build Include="StoredProcedures\hq_update_password.sql" />
     <Build Include="StoredProcedures\hq_seat_sync.sql" />
+    <Build Include="hq_eventchart_del.sql" />
   </ItemGroup>
 </Project>
