@@ -72,9 +72,9 @@ namespace SeatingApi.Controllers
             return chartRepository.ReleaseSeats(chartId, seats);
         }
         [HttpGet("GetCount")]
-        public string GetGaAvailCount(string chartId,string catname)
+        public string GetGaAvailCount(string chartId, string catname, string areaLabel = null)
         {
-            return chartRepository.GetGAAvailCount(chartId, catname);
+            return chartRepository.GetGAAvailCount(chartId, catname, areaLabel);
         }
 
         [HttpGet("SeatSummary")]

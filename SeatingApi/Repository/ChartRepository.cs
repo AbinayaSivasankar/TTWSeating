@@ -358,12 +358,56 @@ namespace SeatingApi.Repository
             }
             return "";
         }
-        public string GetGAAvailCount(string chartId, string catname)
+        public string GetGAAvailCount(string chartId, string catname, string areaLabel = null)
         {
+            if (!string.IsNullOrWhiteSpace(areaLabel))
+            {
+                var matchingSeats = GetSeatDetails(chartId)
+                    .Where(seat => string.Equals(seat.row_name?.Trim(), areaLabel.Trim(), StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                if (matchingSeats.Count == 0)
+                {
+                    return GetGAChartCapacity(chartId, catname, areaLabel).ToString();
+                }
+
+                return matchingSeats.Count(seat => string.Equals(seat.status?.Trim(), "available", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(seat.status?.Trim(), "free", StringComparison.OrdinalIgnoreCase)).ToString();
+            }
+
             DataSet ds = GetGASeats(chartId, catname);
+            if (ds == null || ds.Tables.Count == 0)
+            {
+                return "0";
+            }
+
             int availableCount = ds.Tables[0].AsEnumerable()
-                .Count(row => row["status"].ToString() == "available" || row["status"].ToString() == "Free");
+                .Count(row => string.Equals(row["status"]?.ToString().Trim(), "available", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(row["status"]?.ToString().Trim(), "free", StringComparison.OrdinalIgnoreCase));
             return availableCount.ToString();
+        }
+
+        private int GetGAChartCapacity(string chartId, string catname, string areaLabel)
+        {
+            var chart = GetChartCat(chartId);
+            if (string.IsNullOrWhiteSpace(chart?.chart_json))
+            {
+                return 0;
+            }
+
+            var chartJson = JObject.Parse(chart.chart_json);
+            var categories = chartJson["cats"] as JArray;
+            var categoryIds = categories?
+                .Where(category => string.Equals((string)category["name"] ?? (string)category["category"], catname, StringComparison.OrdinalIgnoreCase))
+                .Select(category => (string)category["id"])
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var areas = chartJson["shapes"] as JArray;
+            var area = areas?.FirstOrDefault(shape =>
+                string.Equals((string)shape["type"], "general", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(((string)shape["label"])?.Trim(), areaLabel.Trim(), StringComparison.OrdinalIgnoreCase) &&
+                (categoryIds == null || categoryIds.Count == 0 || categoryIds.Contains((string)shape["cat"])));
+
+            return (int?)area?["cap"] ?? 0;
         }
 
 

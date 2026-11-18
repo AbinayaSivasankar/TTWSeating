@@ -26,19 +26,30 @@ window.SeatingChart = class SeatingChart {
 
         try {
             debugger;
-            { apiBase: "https://highqcare.com/seating_api/api/chart" } 
-            const baseUrl = this.options.apiBase || "http://localhost:5045/api/chart";
+            const baseUrl = "https://highqcare.com/seating_api/api/chart";
+            window.fabricInterop.apiBase = baseUrl;
+            const chartParams = new URLSearchParams({ chartId: this.chartId, secretkey: this.secretKey });
+            const seatParams = new URLSearchParams({ chartId: this.chartId });
+
+            fetch(`${baseUrl}/Updatestatus?${chartParams}`, { method: "POST" })
+                .then(statusResponse => {
+                    if (!statusResponse.ok) {
+                        console.warn(`Seat status update failed: HTTP ${statusResponse.status}`);
+                    }
+                })
+                .catch(error => console.warn("Seat status update failed:", error));
 
             const [response, seatDetailsResponse] = await Promise.all([
-                fetch(`${baseUrl}?chartId=${this.chartId}&secretkey=${this.secretKey}`),
-                fetch(`${baseUrl}/SeatList?chartId=${this.chartId}`),
-                fetch(`${baseUrl}/Updatestatus?chartId=${this.chartId}&secretkey=${this.secretKey}`, {
-                    method: "POST"
-                })
+                fetch(`${baseUrl}?${chartParams}`),
+                fetch(`${baseUrl}/SeatList?${seatParams}`)
             ]);
+            if (!response.ok) throw new Error(`Chart request failed: HTTP ${response.status}`);
+            if (!seatDetailsResponse.ok) throw new Error(`Seat list request failed: HTTP ${seatDetailsResponse.status}`);
 
             const data = await response.json();
             const seats = await seatDetailsResponse.json();
+            if (!data || !data.chart_json) throw new Error("The API returned no chart data. Check the chart ID and secret key.");
+            if (!Array.isArray(seats)) throw new Error("The API returned an invalid seat list.");
 
             // Initialize Fabric Canvas
             window.fabricInterop.initCanvas(
@@ -50,16 +61,17 @@ window.SeatingChart = class SeatingChart {
             // Load JSON onto Canvas
             window.fabricInterop.loadLayout(this.canvasId, data.chart_json);
 
-            // Enable Interactive User or Select Mode
-            if (this.options.mode === 'user') {
-                window.fabricInterop.enableUserMode(this.canvasId, seats, this.chartId);
-            } else {
+            // The embedded ticketing chart is interactive by default; retain select mode as an explicit opt-in.
+            if (this.options.mode === 'select') {
                 window.fabricInterop.enableSelectMode(this.canvasId);
+            } else {
+                window.fabricInterop.enableUserMode(this.canvasId, seats, this.chartId);
             }
 
             return this;
         } catch (error) {
             console.error('Failed to load seating chart:', error);
+            container.innerHTML = '<div role="alert">Unable to load the seating chart. Check the browser console and API configuration.</div>';
         }
     }
 

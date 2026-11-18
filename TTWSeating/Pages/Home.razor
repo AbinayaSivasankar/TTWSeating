@@ -1261,6 +1261,33 @@
         color: #FFF;
     }
 
+    .sq-chart-loading {
+        display: flex;
+        min-height: 220px;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        border: 1px solid var(--color-border);
+        border-radius: 20px;
+        background: var(--color-surface);
+        color: var(--color-text-muted);
+        font-weight: 600;
+    }
+
+    .sq-chart-loading-spinner {
+        width: 32px;
+        height: 32px;
+        border: 3px solid var(--color-border);
+        border-top-color: var(--color-primary);
+        border-radius: 50%;
+        animation: sq-chart-spin .8s linear infinite;
+    }
+
+    @@keyframes sq-chart-spin {
+        to { transform: rotate(360deg); }
+    }
+
     .sq-empty {
         display: flex;
         flex-direction: column;
@@ -3299,7 +3326,21 @@
                             </div>
                         </section>
 
-                        @if (TotalCount > 0)
+                        @if (isLoadingCharts)
+                        {
+                            <div class="sq-chart-loading" role="status" aria-live="polite" aria-busy="true">
+                                <span class="sq-chart-loading-spinner" aria-hidden="true"></span>
+                                <span>Loading all charts…</span>
+                            </div>
+                        }
+                        else if (!string.IsNullOrEmpty(chartsLoadError))
+                        {
+                            <div class="sq-empty" role="alert">
+                                <strong>Charts could not be loaded</strong>
+                                <span>@chartsLoadError</span>
+                            </div>
+                        }
+                        else if (TotalCount > 0)
                         {
                             <section class="sq-section" aria-label="Charts">
                                 <div class="sq-toolbar">
@@ -3531,6 +3572,8 @@
     private bool isGrid = true;
     private bool showTip = true;
     private bool secretVisible = false;
+    private bool isLoadingCharts = true;
+    private string chartsLoadError = "";
     private bool showDeleteConfirmation;
     private string pendingDeleteChartId = "";
     private string pendingDeleteChartTitle = "";
@@ -3607,7 +3650,7 @@
         UserId = userIdResult.Value ?? "0";
         if (UserId != "" && UserId != "0")
         {
-            GetAllCharts();
+            await LoadAllChartsAsync();
             GetUserKeys();
             var flash = await sessionStorage.GetAsync<string>("FlashMessage");
             if (flash.Success && !string.IsNullOrEmpty(flash.Value))
@@ -3716,19 +3759,41 @@
             ? "••••••••••••"
             : key[..4] + new string('•', 12) + key[^4..];
 
-    public void GetAllCharts()
+    private async Task LoadAllChartsAsync()
     {
-        cdlChart objChart = new cdlChart();
-        NameValueCollection vncParams = new NameValueCollection();
-        DataSet ds = new DataSet();
-        vncParams.Add("chart_id", "0");
-        vncParams.Add("log_id", UserId);
-        vncParams.Add("chart_key", "");
-        vncParams.Add("option", "U");
-        objChart.GetChartCategory(vncParams, ref ds);
-        if (ds != null)
+        isLoadingCharts = true;
+        chartsLoadError = "";
+
+        var userId = UserId;
+        var chartLoadTask = Task.Run(() =>
         {
-            Charts = ds;
+            var chart = new cdlChart();
+            var parameters = new NameValueCollection
+            {
+                ["chart_id"] = "0",
+                ["log_id"] = userId,
+                ["chart_key"] = "",
+                ["option"] = "U"
+            };
+            var data = new DataSet();
+            chart.GetChartCategory(parameters, ref data);
+            return data;
+        });
+
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            Charts = await chartLoadTask ?? new DataSet();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Loading dashboard charts failed: {ex}");
+            chartsLoadError = "Please refresh the page and try again.";
+        }
+        finally
+        {
+            isLoadingCharts = false;
         }
     }
 
@@ -3784,7 +3849,7 @@
 
             favorites.Remove(chartId);
             await js.InvokeVoidAsync("sqSaveFavorites", UserId, favorites.ToArray());
-            GetAllCharts();
+            await LoadAllChartsAsync();
             flashMessage = "Chart deleted";
             _ = HideFlashAsync();
         }

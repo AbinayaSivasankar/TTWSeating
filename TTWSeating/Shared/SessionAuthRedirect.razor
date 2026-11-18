@@ -1,14 +1,7 @@
 @inject SessionAuthenticationStateProvider AuthenticationState
 @inject NavigationManager Navigation
 
-@if (!AuthenticationState.IsInitialized)
-{
-    <p>Checking sign-in...</p>
-}
-else
-{
-    <p>Redirecting to sign in...</p>
-}
+<AuthCheckLoader Message="@(AuthenticationState.IsInitialized ? "Redirecting to sign in..." : "Checking your sign-in...")" />
 
 @code {
     private bool _initialized;
@@ -24,7 +17,7 @@ else
         await AuthenticationState.InitializeAsync();
         if (!AuthenticationState.IsAuthenticated)
         {
-            Navigation.NavigateTo("/", replace: true);
+            Navigation.NavigateTo(Navigation.BaseUri, replace: true);
         }
     }
 }

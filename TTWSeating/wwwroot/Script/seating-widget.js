@@ -35,6 +35,43 @@ let crossGuideLine = null;
 let rowBaseline = null;
 let lastRowPosition = null;
 
+function findGeneralAreaAtPointer(canvas, event) {
+    const pointer = canvas.getPointer(event);
+    const point = new fabric.Point(pointer.x, pointer.y);
+    return canvas.getObjects().find(obj => {
+        const objectType = obj.objectType || (obj.get && obj.get('objectType'));
+        return objectType === 'genrectangle' && obj.containsPoint(point);
+    }) || null;
+}
+
+function designerSeatNumber(start, index) {
+    const value = String(start == null ? '1' : start).trim() || '1';
+    const numeric = /^(.*?)(\d+)$/.exec(value);
+    if (numeric) return numeric[1] + String(+numeric[2] + index).padStart(numeric[2].length > 1 && numeric[2][0] === '0' ? numeric[2].length : 0, '0');
+    return value.slice(0, -1) + String.fromCharCode(value.toUpperCase().charCodeAt(value.length - 1) + index);
+}
+
+function designerPolylineSeats(points, count, spacing) {
+    const segments = [];
+    for (let i = 1; i < points.length; i++) segments.push(Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y));
+    const seats = [];
+    let segmentIndex = 0, distanceBeforeSegment = 0;
+    for (let i = 0; i < count; i++) {
+        const distance = i * spacing;
+        while (segmentIndex < segments.length - 1 && distance > distanceBeforeSegment + segments[segmentIndex]) distanceBeforeSegment += segments[segmentIndex++];
+        const a = points[segmentIndex], b = points[segmentIndex + 1] || points[segmentIndex], length = segments[segmentIndex] || 1;
+        const t = (distance - distanceBeforeSegment) / length;
+        seats.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+    }
+    return seats;
+}
+
+function rotateDesignerPoint(point, center, degrees) {
+    if (!degrees) return point;
+    const radians = degrees * Math.PI / 180, cos = Math.cos(radians), sin = Math.sin(radians), x = point.x - center.x, y = point.y - center.y;
+    return { x: center.x + x * cos - y * sin, y: center.y + x * sin + y * cos };
+}
+
 window.fabricInterop = {
     canvases: {},
     isDrawingSeats: false,
@@ -1238,10 +1275,13 @@ window.fabricInterop = {
                 textChild = obj._objects.find(ch => (ch.type === 'text' || ch.type === 'i-text' || ch.type === 'textbox'));
             }
             if (textChild) {
-                if (typeof obj.originalLabel === 'undefined') {
-                    obj.originalLabel = textChild.text || '';
+                const seatProps = obj.seatProps || obj.get('seatProps') || {};
+                const hasAccessibilityIcon = ['wheelchair', 'companion', 'accessible'].includes(seatProps.acc);
+                const seatLabel = String(obj.seatLabel || obj.get('seatLabel') || textChild.text || '');
+                if (typeof obj.originalLabel === 'undefined' || !obj.originalLabel) obj.originalLabel = hasAccessibilityIcon ? '' : seatLabel;
+                if (seatLabel && textChild.text !== '✔') {
+                    textChild.set({ text: hasAccessibilityIcon ? '' : seatLabel, visible: true, opacity: 1 });
                 }
-                textChild.set('text', '');
                 obj.textObj = textChild;
             }
         });
@@ -1249,11 +1289,9 @@ window.fabricInterop = {
 
         canvas.on("mouse:over", function (opt) {
             if (!opt.target || opt.target.type !== "group") return;
-            let seat = opt.target;
-            const seatStatus = seat.seatStatus || seat.get('seatStatus') || 'available';
-            if (seatStatus == "sold") return;
+            const seat = opt.target;
             let categoryId = seat.categoryName || seat.get("categoryName") || "";
-            let priceObj = window.globalPriceList.find(x => x.category === categoryId);
+            let priceObj = (window.globalPriceList || []).find(x => x.category === categoryId);
             // let price = priceObj ? priceObj.price : "Unknown";
             let price = "Unknown";
             if (!priceObj || priceObj.ticketTypes == null) {
@@ -1271,8 +1309,7 @@ window.fabricInterop = {
 
                 price = minPrice + "-" + maxPrice;
             }
-            showTooltip(opt.e.clientX, opt.e.clientY,
-                `Category : ${categoryId}<br>Seat : ${seat.seatId}<br>Price : $${price}`);
+            showSeatTooltip(opt.e.clientX, opt.e.clientY, seat, price);
         });
 
         canvas.on("mouse:out", function () {
@@ -1281,8 +1318,13 @@ window.fabricInterop = {
 
         // Updated mouse:down handler with ticket type popup
         canvas.on("mouse:down", (opt) => {
-            debugger;
             let seat = opt.target;
+            const targetType = seat && (seat.objectType || (seat.get && seat.get('objectType')));
+            const isSeatGroup = seat && seat.type === 'group' && (seat.seatId || seat.get('seatId'));
+
+            if (targetType !== 'genrectangle' && !isSeatGroup) {
+                seat = findGeneralAreaAtPointer(canvas, opt.e) || seat;
+            }
 
             if (!seat) {
                 // Check if click was on a seat at this position (for row labels or empty space)
@@ -1320,7 +1362,7 @@ window.fabricInterop = {
 
                 // If seat is already selected, deselect it
                 if (textObj.text === "✔") {
-                    textObj.set({ text: "", fontWeight: "normal", fontSize: 10 });
+                    textObj.set({ text: seat.originalLabel || seat.seatLabel || '', fontWeight: 600, fontSize: seat.seatProps?.acc ? 11 : 8 });
                     seat.set("isSelected", false);
                     seat.isSelected = false;
                     seat.set("holdToken", "");
@@ -1339,7 +1381,7 @@ window.fabricInterop = {
 
                 // Get category and price info
                 let categoryId = seat.categoryName || seat.get("categoryName") || "";
-                let priceObj = window.globalPriceList.find(x => x.category === categoryId);
+                let priceObj = (window.globalPriceList || []).find(x => x.category === categoryId);
 
                 // Store the seat for later use
                 this._pendingSeatSelection = {
@@ -1353,7 +1395,7 @@ window.fabricInterop = {
                 // Show ticket type popup
                 this.showTicketTypePopup(canvasId, seat, priceObj);
 
-            } else if (seat.type === 'rect' && seat.objectType === 'genrectangle') {
+            } else if (seat.objectType === 'genrectangle') {
                 this.handleGenRectangleSelection(canvasId, seat, opt.e, this._chartId);
             }
         });
@@ -1377,7 +1419,7 @@ window.fabricInterop = {
                 obj.objectType === "genrectangle"
             );
 
-            let priceObj = window.globalPriceList.find(
+            let priceObj = (window.globalPriceList || []).find(
                 x => x.category === area.categoryName
             );
 
@@ -1745,6 +1787,8 @@ window.fabricInterop = {
             let color;
             for (var item of SeatInfo) {
                 if (item.seat_name == seat.seatId) {
+                    seat.seatStatus = item.status || 'available';
+                    seat.set('seatStatus', seat.seatStatus);
                     switch (item.status) {
                         case 'sold':
                         case 'booked':
@@ -3012,7 +3056,7 @@ window.fabricInterop = {
             shapes.forEach((shape) => {
                 if (!shape || shape.type !== 'row') return;
                 const rowLabel = shape.label || '';
-                if (!rowLabel) return;
+                if (!rowLabel || shape.lblOn === false) return;
                 if (canvas.getObjects().some(o => o.isRowLabel && o.rowLabel === rowLabel)) return;
                 const firstSeat = canvas.getObjects().find(obj => obj.rowLabel === rowLabel && obj.type === 'group');
                 if (!firstSeat) return;
@@ -3028,27 +3072,6 @@ window.fabricInterop = {
                     evented: false,
                     isRowLabel: true,
                     rowLabel: rowLabel
-                });
-                canvas.add(label);
-            });
-        }
-
-        if (shapes.length) {
-            shapes.forEach((shape) => {
-                if (!shape || !(shape.type === 'general' || shape.type === 'rect')) return;
-                if (!shape.label) return;
-                const centerX = (shape.x || 0) + ((shape.w || 0) / 2);
-                const centerY = (shape.y || 0) + ((shape.h || 0) / 2);
-                const label = new fabric.Text(shape.label, {
-                    left: centerX,
-                    top: centerY,
-                    fontSize: 14,
-                    fontWeight: 700,
-                    fill: '#1e2540',
-                    originX: 'center',
-                    originY: 'center',
-                    selectable: false,
-                    evented: false
                 });
                 canvas.add(label);
             });
@@ -3118,54 +3141,48 @@ window.fabricInterop = {
         const seatCount = shape.count || 0;
         if (!seatCount) return;
 
-        const rowSeats = [];
+        let points;
+        if (shape.pts && shape.pts.length > 1) {
+            points = designerPolylineSeats(shape.pts, seatCount, 26);
+        } else {
+            const dx = (shape.x2 || shape.x1 || 0) - (shape.x1 || 0);
+            const dy = (shape.y2 || shape.y1 || 0) - (shape.y1 || 0);
+            const len = Math.hypot(dx, dy) || 1;
+            const mx = ((shape.x1 + (shape.x2 || shape.x1)) / 2) + (-dy / len) * (shape.curve || 0) * 2;
+            const my = ((shape.y1 + (shape.y2 || shape.y1)) / 2) + (dx / len) * (shape.curve || 0) * 2;
+            points = Array.from({ length: seatCount }, (_, i) => {
+                const t = seatCount > 1 ? i / (seatCount - 1) : 0, u = 1 - t;
+                return {
+                    x: u * u * (shape.x1 || 0) + 2 * u * t * mx + t * t * (shape.x2 || shape.x1 || 0),
+                    y: u * u * (shape.y1 || 0) + 2 * u * t * my + t * t * (shape.y2 || shape.y1 || 0)
+                };
+            });
+        }
+        const xs = points.map(p => p.x), ys = points.map(p => p.y);
+        const center = { x: (Math.min(...xs) + Math.max(...xs)) / 2 - 12, y: (Math.min(...ys) + Math.max(...ys)) / 2 };
         const rowLabel = shape.label || '';
-
-        for (let i = 0; i < seatCount; i++) {
-            let x = 0;
-            let y = 0;
-
-            if (shape.pts && shape.pts.length > 1) {
-                const total = shape.pts.length - 1;
-                const dist = (i / Math.max(1, seatCount - 1)) * total;
-                const idx = Math.floor(dist);
-                const t = dist - idx;
-                const a = shape.pts[idx];
-                const b = shape.pts[Math.min(shape.pts.length - 1, idx + 1)];
-                x = a.x + (b.x - a.x) * t;
-                y = a.y + (b.y - a.y) * t;
-            } else {
-                const dx = (shape.x2 || shape.x1 || 0) - (shape.x1 || 0);
-                const dy = (shape.y2 || shape.y1 || 0) - (shape.y1 || 0);
-                const len = Math.hypot(dx, dy) || 1;
-                const mx = ((shape.x1 + (shape.x2 || shape.x1)) / 2) + (-dy / len) * (shape.curve || 0) * 2;
-                const my = ((shape.y1 + (shape.y2 || shape.y1)) / 2) + (dx / len) * (shape.curve || 0) * 2;
-                const t = seatCount > 1 ? i / (seatCount - 1) : 0;
-                const u = 1 - t;
-                x = u * u * (shape.x1 || 0) + 2 * u * t * mx + t * t * (shape.x2 || shape.x1 || 0);
-                y = u * u * (shape.y1 || 0) + 2 * u * t * my + t * t * (shape.y2 || shape.y1 || 0);
-            }
-
-            // same numbering as chart-editor.js seats(): first label + position, counted from the right for rtl rows
+        const rowSeats = points.map((point, i) => {
             const sd = (shape.sd && shape.sd[i]) || {};
             const k = shape.dir === 'rtl' ? seatCount - 1 - i : i;
-            const fromId = ids && ids[i] ? String(ids[i]).split('-').pop().replace(/~\d+$/, '') : '';
-            const seatNumber = String(sd.label || fromId || ((+shape.start || 0) + k)).trim();
+            const seatNumber = String(sd.label || designerSeatNumber(shape.start, k)).trim();
             const seatId = (ids && ids[i]) || (rowLabel || 'R') + '-' + seatNumber;
             const seatCat = sd.cat || shape.cat;
-
-            rowSeats.push(this.makeDesignerSeat({
-                x, y, label: seatNumber, seatId, rowLabel,
+            const position = rotateDesignerPoint(point, center, shape.rot || 0);
+            return this.makeDesignerSeat({
+                x: position.x, y: position.y, label: seatNumber, seatId, rowLabel, chartSeatType: 'row',
                 color: this.getCategoryColor(seatCat), catId: seatCat,
                 categoryName: this.getCategoryName(seatCat), props: sd
-            }));
-        }
+            });
+        });
 
         rowSeats.forEach(seat => canvas.add(seat));
-        if (shape.label) {
+        if (shape.label && shape.lblOn !== false) {
+            const first = points.reduce((left, point) => point.x < left.x ? point : left, points[0]);
+            const labelPosition = rotateDesignerPoint({ x: first.x - 22, y: first.y + 4 }, center, shape.rot || 0);
             const rowText = new fabric.Text(shape.label, {
-                left: rowSeats[0] ? rowSeats[0].left - 20 : 0,
-                top: rowSeats[0] ? rowSeats[0].top : 0,
+                left: labelPosition.x,
+                top: labelPosition.y,
+                angle: shape.rot || 0,
                 fontSize: 12,
                 fontWeight: 700,
                 fill: '#64708f',
@@ -3183,51 +3200,28 @@ window.fabricInterop = {
     recreateDesignerTable(canvas, shape, ids) {
         const centerX = shape.x || 0;
         const centerY = shape.y || 0;
-        const fillColor = shape.cat ? (window.fabricInterop && window.fabricInterop.getCategoryColor ? window.fabricInterop.getCategoryColor(shape.cat) : '#f59e0b') : '#f59e0b';
+        const fillColor = this.getCategoryColor(shape.cat);
+        const baseStyle = {
+            left: centerX, top: centerY, fill: fillColor + '33', stroke: fillColor, strokeWidth: 1.5,
+            originX: 'center', originY: 'center', angle: shape.rot || 0, selectable: false, evented: false
+        };
 
         if (shape.shape === 'rect') {
-            const rect = new fabric.Rect({
-                left: centerX,
-                top: centerY,
-                width: shape.w || 120,
-                height: shape.h || 60,
-                fill: fillColor + '55',
-                stroke: '#1e2540',
-                strokeWidth: 1.5,
-                originX: 'center',
-                originY: 'center',
-                selectable: false,
-                evented: false,
-                rx: 8,
-                ry: 8
-            });
-            canvas.add(rect);
+            canvas.add(new fabric.Rect({ ...baseStyle, width: shape.w || 120, height: shape.h || 60, rx: 8, ry: 8 }));
         } else {
-            const circle = new fabric.Circle({
-                left: centerX,
-                top: centerY,
-                radius: shape.r || 36,
-                fill: fillColor + '55',
-                stroke: '#1e2540',
-                strokeWidth: 1.5,
-                originX: 'center',
-                originY: 'center',
-                selectable: false,
-                evented: false
-            });
-            canvas.add(circle);
+            canvas.add(new fabric.Circle({ ...baseStyle, radius: shape.r || 36 }));
         }
 
         const seatPositions = (shape.shape === 'rect')
             ? (() => {
                 const top = Math.ceil((shape.count || 1) / 2);
-                const bot = (shape.count || 1) - top;
+                const bottom = (shape.count || 1) - top;
                 const coords = [];
-                [[top, -1], [bot, 1]].forEach(([m, sd]) => {
-                    for (let i = 0; i < m; i++) {
+                [[top, -1], [bottom, 1]].forEach(([count, direction]) => {
+                    for (let i = 0; i < count; i++) {
                         coords.push({
-                            x: centerX - (shape.w || 120) / 2 + (i + 0.5) * (shape.w || 120) / Math.max(1, m),
-                            y: centerY + sd * ((shape.h || 60) / 2 + 14)
+                            x: centerX - (shape.w || 120) / 2 + (i + 0.5) * (shape.w || 120) / Math.max(1, count),
+                            y: centerY + direction * ((shape.h || 60) / 2 + 13)
                         });
                     }
                 });
@@ -3236,17 +3230,17 @@ window.fabricInterop = {
             : Array.from({ length: shape.count || 0 }, (_, i) => {
                 const a = i / Math.max(1, shape.count || 1) * Math.PI * 2;
                 return {
-                    x: centerX + Math.cos(a) * ((shape.r || 36) + 14),
-                    y: centerY + Math.sin(a) * ((shape.r || 36) + 14)
+                    x: centerX + Math.cos(a) * ((shape.r || 36) + 13),
+                    y: centerY + Math.sin(a) * ((shape.r || 36) + 13)
                 };
             });
 
         const tableLabel = (shape.label || '').trim() || ('T' + shape.id);
         seatPositions.forEach((seat, idx) => {
-            const label = String(idx + 1);
+            const label = String(idx + 1), position = rotateDesignerPoint(seat, { x: centerX, y: centerY }, shape.rot || 0);
             canvas.add(this.makeDesignerSeat({
-                x: seat.x, y: seat.y, label, seatId: (ids && ids[idx]) || (tableLabel + '-' + label),
-                rowLabel: tableLabel, color: this.getCategoryColor(shape.cat), catId: shape.cat,
+                x: position.x, y: position.y, label, seatId: (ids && ids[idx]) || (tableLabel + '-' + label),
+                rowLabel: tableLabel, chartSeatType: 'table', color: this.getCategoryColor(shape.cat), catId: shape.cat,
                 categoryName: this.getCategoryName(shape.cat)
             }));
         });
@@ -3255,6 +3249,7 @@ window.fabricInterop = {
             const label = new fabric.Text(shape.label, {
                 left: centerX,
                 top: centerY + 4,
+                angle: shape.rot || 0,
                 fontSize: 12,
                 fontWeight: 700,
                 fill: '#1e2540',
@@ -3272,18 +3267,18 @@ window.fabricInterop = {
         const w = shape.w || 100;
         const h = shape.h || 100;
         const rect = new fabric.Rect({
-            left: x,
-            top: y,
+            left: x + w / 2,
+            top: y + h / 2,
             width: w,
             height: h,
-            fill: '#dfe3f3',
-            stroke: '#64708f',
-            strokeWidth: 1,
-            originX: 'left',
-            originY: 'top',
+            fill: '#e6e9f4',
+            stroke: '#b9c1da',
+            strokeWidth: 1.5,
+            originX: 'center',
+            originY: 'center',
+            angle: shape.rot || 0,
             selectable: false,
             evented: false,
-            opacity: 0.35,
             rx: 10,
             ry: 10
         });
@@ -3292,6 +3287,7 @@ window.fabricInterop = {
             const label = new fabric.Text(shape.label, {
                 left: x + w / 2,
                 top: y + h / 2,
+                angle: shape.rot || 0,
                 fontSize: 14,
                 fontWeight: 600,
                 fill: '#1e2540',
@@ -3304,55 +3300,76 @@ window.fabricInterop = {
         }
     },
     recreateDesignerGeneral(canvas, shape) {
-        const gaColor = this.getCategoryColor(shape.cat);
-        const rect = new fabric.Rect({
-            left: shape.x || 0,
-            top: shape.y || 0,
-            width: shape.w || 100,
-            height: shape.h || 60,
-            fill: gaColor,
-            stroke: '#64708f',
-            strokeWidth: 1,
-            originX: 'left',
-            originY: 'top',
-            selectable: false,
-            evented: false,
-            opacity: 0.35,
-            rx: 10,
-            ry: 10,
-            objectType: 'genrectangle',
-            createdBy: 'designer',
-            rectangleId: 'ga-' + shape.id,
-            rectangleLabel: shape.label || '',
-            generalLabel: shape.label || null,
-            capacity: shape.cap || 0,
-            categoryId: gaColor,
-            categoryName: this.getCategoryName(shape.cat)
-        });
-        canvas.add(rect);
-
+        const x = shape.x || 0, y = shape.y || 0, w = shape.w || 100, h = shape.h || 60;
+        const center = { x: x + w / 2, y: y + h / 2 }, angle = shape.rot || 0, gaColor = this.getCategoryColor(shape.cat);
+        const common = {
+            fill: gaColor + '2a', stroke: gaColor, strokeWidth: 1.5, strokeDashArray: [7, 5],
+            selectable: false, evented: false, objectType: 'genrectangle', createdBy: 'designer',
+            rectangleId: 'ga-' + shape.id, rectangleLabel: shape.label || '', generalLabel: shape.label || null,
+            capacity: shape.cap || 0, categoryId: gaColor, categoryName: this.getCategoryName(shape.cat)
+        };
+        let area;
+        if (shape.shape === 'poly' && Array.isArray(shape.pts) && shape.pts.length >= 3) {
+            const points = shape.pts.map(point => rotateDesignerPoint(point, center, angle));
+            const minX = Math.min(...points.map(point => point.x)), minY = Math.min(...points.map(point => point.y));
+            area = new fabric.Polygon(points.map(point => ({ x: point.x - minX, y: point.y - minY })), {
+                ...common, left: minX, top: minY, originX: 'left', originY: 'top'
+            });
+        } else if (shape.shape === 'circle') {
+            area = new fabric.Ellipse({ ...common, left: center.x, top: center.y, rx: w / 2, ry: h / 2, originX: 'center', originY: 'center', angle });
+        } else {
+            area = new fabric.Rect({ ...common, left: center.x, top: center.y, width: w, height: h, rx: 10, ry: 10, originX: 'center', originY: 'center', angle });
+        }
+        canvas.add(area);
         if (shape.label) {
-            const label = new fabric.Text(shape.label, {
-                left: (shape.x || 0) + (shape.w || 0) / 2,
-                top: (shape.y || 0) + (shape.h || 0) / 2,
-                fontSize: 14,
-                fontWeight: 700,
-                fill: '#1e2540',
-                originX: 'center',
-                originY: 'center',
-                selectable: false,
-                evented: false
+            const rectangleId = 'ga-' + shape.id;
+            const labelPosition = rotateDesignerPoint({ x: center.x, y: center.y - 8 }, center, angle);
+            const label = new fabric.Textbox(shape.label, {
+                left: labelPosition.x, top: labelPosition.y, width: Math.max(40, w - 16), angle,
+                fontSize: Math.max(10, Math.min(13, w * 0.1)), fontWeight: 700, fontFamily: 'Arial',
+                fill: '#24304a', textAlign: 'center', lineHeight: 1,
+                originX: 'center', originY: 'center', selectable: false, evented: false,
+                rectangleId, isGeneralAreaBaseLabel: true
             });
             canvas.add(label);
+
+            const badgePosition = rotateDesignerPoint({ x: center.x, y: center.y + 19 }, center, angle);
+            const badgeWidth = Math.max(48, Math.min(110, w - 16));
+            const capacityBadge = new fabric.Rect({
+                left: badgePosition.x, top: badgePosition.y, width: badgeWidth, height: 20, angle,
+                rx: 9, ry: 9, fill: '#ffffff', stroke: '#dce3f0', strokeWidth: 1,
+                originX: 'center', originY: 'center', selectable: false, evented: false,
+                rectangleId, isGeneralCapacityBadge: true
+            });
+            canvas.add(capacityBadge);
+            const capacity = new fabric.Text((shape.cap || 0) + ' capacity', {
+                left: badgePosition.x, top: badgePosition.y, angle, fontSize: 10, fontWeight: 600, fontFamily: 'Arial',
+                fill: '#4c5873', originX: 'center', originY: 'center', selectable: false, evented: false,
+                rectangleId, isGeneralCapacityLabel: true
+            });
+            canvas.add(capacity);
         }
     },
     recreateDesignerIcon(canvas, shape) {
-        const iconSvg = `
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-                <path d="M12 3a9 9 0 100 18 9 9 0 000-18zm0 5.5v4.2m0 4.1v.1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                <circle cx="12" cy="12" r="1.5" fill="currentColor"/>
-            </svg>`;
-
+        const paths = {
+            restroom: '<circle cx="6.5" cy="4" r="2.4" fill="currentColor"/><path d="M4 8h5v7H7.5v6h-2v-6H4z" fill="currentColor"/><circle cx="17.5" cy="4" r="2.4" fill="currentColor"/><path d="M17.5 8l3.5 8h-2v5h-3v-5h-2z" fill="currentColor"/><path d="M12 3v18" fill="none" stroke="currentColor" stroke-width="2"/>',
+            man: '<circle cx="12" cy="4" r="2.4" fill="currentColor"/><path d="M8.5 8h7v7h-2v7h-3v-7h-2z" fill="currentColor"/>',
+            woman: '<circle cx="12" cy="4" r="2.4" fill="currentColor"/><path d="M12 8l4.5 9H14v5h-4v-5H7.5z" fill="currentColor"/>',
+            stage: '<path d="M8 4h8l3 11H5zM4 17h16v3H4z" fill="currentColor"/>',
+            entrance: '<path d="M14 4h5v16h-5M4 12h10M10 8l4 4-4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+            exit: '<path d="M10 4H5v16h5M10 12h10M16 8l4 4-4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+            stairs: '<path d="M3 20h5v-5h5v-5h5V5h3" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
+            dining: '<path d="M7 3v18M4 3v6a3 3 0 006 0V3M17 21V3c-2 1-3 4-3 8h3" fill="none" stroke="currentColor" stroke-width="2"/>',
+            bar: '<path d="M4 4h16l-8 9zM12 13v7M8 20h8" fill="none" stroke="currentColor" stroke-width="2"/>',
+            beer: '<path d="M6 6h9v14H6zM15 9h3a2 2 0 012 2v3a2 2 0 01-2 2h-3" fill="none" stroke="currentColor" stroke-width="2"/>',
+            coffee: '<path d="M4 9h12v6a4 4 0 01-4 4H8a4 4 0 01-4-4zM16 11h2a2 2 0 010 4h-2M8 3v3M12 3v3" fill="none" stroke="currentColor" stroke-width="2"/>',
+            warning: '<path d="M12 3l10 18H2zM12 10v5M12 18h.01" fill="none" stroke="currentColor" stroke-width="2"/>',
+            wheelchair: '<circle cx="10" cy="4" r="2" fill="currentColor"/><path d="M10 8v6h5l2 5M7 11a5 5 0 105 8" fill="none" stroke="currentColor" stroke-width="2"/>',
+            info: '<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 11v6M12 7.5v.01" fill="none" stroke="currentColor" stroke-width="2"/>',
+            lift: '<path d="M5 3h14v18H5zM9 10l3-3 3 3M9 14l3 3 3-3" fill="none" stroke="currentColor" stroke-width="2"/>'
+        };
+        const color = shape.color || '#1e2540';
+        const iconSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" color="${color}">${paths[shape.ic] || paths.info}</svg>`;
         const img = new Image();
         const svg = new Blob([iconSvg], { type: 'image/svg+xml;charset=utf-8' });
         const url = URL.createObjectURL(svg);
@@ -3362,10 +3379,11 @@ window.fabricInterop = {
                 top: shape.y || 0,
                 scaleX: (shape.size || 32) / img.width,
                 scaleY: (shape.size || 32) / img.height,
+                angle: shape.rot || 0,
                 selectable: false,
                 evented: false,
-                originX: 'left',
-                originY: 'top'
+                originX: 'center',
+                originY: 'center'
             });
             canvas.add(iconImg);
             URL.revokeObjectURL(url);
@@ -3373,14 +3391,25 @@ window.fabricInterop = {
         img.src = url;
     },
     recreateDesignerLine(canvas, shape) {
-        const line = new fabric.Line([shape.x1, shape.y1, shape.x2, shape.y2], {
-            stroke: shape.color || '#64708f',
-            strokeWidth: shape.w || 3,
-            selectable: false,
-            evented: false,
+        const dx = shape.x2 - shape.x1, dy = shape.y2 - shape.y1, length = Math.hypot(dx, dy) || 1;
+        const ux = dx / length, uy = dy / length, arrowSize = 6 + (shape.w || 3) * 2;
+        const endX = shape.arrow ? shape.x2 - ux * arrowSize * .6 : shape.x2;
+        const endY = shape.arrow ? shape.y2 - uy * arrowSize * .6 : shape.y2;
+        canvas.add(new fabric.Line([shape.x1, shape.y1, endX, endY], {
+            stroke: shape.color || '#1e2540', strokeWidth: shape.w || 3, selectable: false, evented: false,
             strokeDashArray: shape.dash ? shape.dash.split(' ').map(v => Number(v)).filter(v => !isNaN(v)) : []
-        });
-        canvas.add(line);
+        }));
+        if (shape.arrow) {
+            const points = [
+                { x: shape.x2, y: shape.y2 },
+                { x: shape.x2 - ux * arrowSize - uy * arrowSize * .5, y: shape.y2 - uy * arrowSize + ux * arrowSize * .5 },
+                { x: shape.x2 - ux * arrowSize + uy * arrowSize * .5, y: shape.y2 - uy * arrowSize - ux * arrowSize * .5 }
+            ];
+            const minX = Math.min(...points.map(point => point.x)), minY = Math.min(...points.map(point => point.y));
+            canvas.add(new fabric.Polygon(points.map(point => ({ x: point.x - minX, y: point.y - minY })), {
+                left: minX, top: minY, originX: 'left', originY: 'top', fill: shape.color || '#1e2540', selectable: false, evented: false
+            }));
+        }
     },
     recreateDesignerText(canvas, shape) {
         const text = new fabric.Text(shape.text || '', {
@@ -3388,7 +3417,8 @@ window.fabricInterop = {
             top: shape.y || 0,
             fontSize: shape.size || 16,
             fontWeight: 600,
-            fill: '#1e2540',
+            angle: shape.rot || 0,
+            fill: shape.color || '#1e2540',
             originX: 'center',
             originY: 'center',
             selectable: false,
@@ -3433,14 +3463,54 @@ window.fabricInterop = {
     // One selectable seat, with the properties enableUserMode / applyStatusColors / the ticket popup read.
     makeDesignerSeat(o) {
         const circle = new fabric.Circle({
-            radius: 8, left: o.x, top: o.y, fill: o.color, stroke: '#ffffff', strokeWidth: 1.5,
+            radius: 9, left: o.x, top: o.y, fill: o.color, stroke: '#ffffff', strokeWidth: 1.5,
             originX: 'center', originY: 'center', selectable: false, evented: false
         });
-        const text = new fabric.Text(String(o.label), {
-            left: o.x, top: o.y, fontSize: 8, fontWeight: 'bold', fill: '#ffffff',
+        const props = o.props || {};
+        const accessibilityType = ['wheelchair', 'companion', 'accessible'].includes(props.acc) ? props.acc : '';
+        const hasAccessibility = Boolean(accessibilityType);
+        const displayLabel = String(o.label);
+        const text = new fabric.Text(hasAccessibility ? '' : displayLabel, {
+            left: o.x, top: o.y, fontSize: 8, fontWeight: 600, fill: '#ffffff', fontFamily: 'Arial',
             originX: 'center', originY: 'center', selectable: false, evented: false
         });
-        const g = new fabric.Group([circle, text], {
+        const children = [circle, text];
+        if (hasAccessibility) {
+            const iconStyle = { stroke: '#ffffff', strokeWidth: 1.3, strokeLineCap: 'round', strokeLineJoin: 'round', selectable: false, evented: false };
+            if (accessibilityType === 'wheelchair') {
+                children.push(new fabric.Circle({ radius: 0.9, left: o.x - 1.5, top: o.y - 5, fill: '#ffffff', originX: 'center', originY: 'center', selectable: false, evented: false }));
+                children.push(new fabric.Circle({ radius: 2.6, left: o.x - 1, top: o.y + 2, fill: 'transparent', stroke: '#ffffff', strokeWidth: 1.2, originX: 'center', originY: 'center', selectable: false, evented: false }));
+                children.push(new fabric.Line([o.x - 1.5, o.y - 3.8, o.x - 0.2, o.y - 0.2], iconStyle));
+                children.push(new fabric.Line([o.x - 0.2, o.y - 1.8, o.x + 3.2, o.y - 1.8], iconStyle));
+                children.push(new fabric.Line([o.x - 0.2, o.y - 0.2, o.x + 2, o.y + 1.3], iconStyle));
+            } else if (accessibilityType === 'companion') {
+                children.push(new fabric.Circle({ radius: 1.1, left: o.x - 2.3, top: o.y - 4, fill: '#ffffff', originX: 'center', originY: 'center', selectable: false, evented: false }));
+                children.push(new fabric.Circle({ radius: 1, left: o.x + 2.7, top: o.y - 3.5, fill: '#ffffff', originX: 'center', originY: 'center', selectable: false, evented: false }));
+                children.push(new fabric.Line([o.x - 2.3, o.y - 2.6, o.x - 2.3, o.y + 3.5], iconStyle));
+                children.push(new fabric.Line([o.x + 2.7, o.y - 2.5, o.x + 2.7, o.y + 3.5], iconStyle));
+                children.push(new fabric.Line([o.x - 4.5, o.y + 3.5, o.x - 0.4, o.y + 3.5], iconStyle));
+                children.push(new fabric.Line([o.x + 0.5, o.y + 3.5, o.x + 4.5, o.y + 3.5], iconStyle));
+            } else {
+                children.push(new fabric.Circle({ radius: 1.1, left: o.x, top: o.y - 4.7, fill: '#ffffff', originX: 'center', originY: 'center', selectable: false, evented: false }));
+                children.push(new fabric.Line([o.x, o.y - 3.2, o.x, o.y + 0.7], iconStyle));
+                children.push(new fabric.Line([o.x - 3.5, o.y - 1.8, o.x + 3.5, o.y - 1.8], iconStyle));
+                children.push(new fabric.Line([o.x, o.y + 0.7, o.x - 2.8, o.y + 4.5], iconStyle));
+                children.push(new fabric.Line([o.x, o.y + 0.7, o.x + 2.8, o.y + 4.5], iconStyle));
+            }
+        }
+        const accessibilityFlags = ['hear', 'res', 'ver', 'leg', 'arm'].filter(key => props[key]);
+        if (accessibilityFlags.length) {
+            const badgeX = o.x + 8, badgeY = o.y - 8;
+            children.push(new fabric.Circle({ radius: 5.6, left: badgeX, top: badgeY, fill: '#f59e0b', stroke: '#ffffff', strokeWidth: 1.2, originX: 'center', originY: 'center', selectable: false, evented: false }));
+            if (accessibilityFlags.length === 1) {
+                const markStyle = { stroke: '#ffffff', strokeWidth: 0.9, strokeLineCap: 'round', strokeLineJoin: 'round', selectable: false, evented: false };
+                children.push(new fabric.Line([badgeX - 2.5, badgeY, badgeX + 2.5, badgeY], markStyle));
+                children.push(new fabric.Line([badgeX, badgeY - 2.5, badgeX, badgeY + 2.5], markStyle));
+            } else {
+                children.push(new fabric.Text(String(accessibilityFlags.length), { left: badgeX, top: badgeY, fontSize: 7, fontWeight: 'bold', fill: '#ffffff', originX: 'center', originY: 'center', selectable: false, evented: false }));
+            }
+        }
+        const g = new fabric.Group(children, {
             left: o.x, top: o.y, originX: 'center', originY: 'center', selectable: false, evented: false,
             hasControls: false, hasBorders: false, subTargetCheck: true, objectCaching: false
         });
@@ -3448,12 +3518,16 @@ window.fabricInterop = {
         g.seatLabel = String(o.label);
         g.rowLabel = o.rowLabel || '';
         g.rowId = o.rowLabel || 'row';
+        g.chartSeatType = o.chartSeatType || 'row';
         g.categoryId = o.color;                 // same meaning as on seats saved by the old designer: the colour
         g.catId = o.catId || '';
         g.categoryName = o.categoryName || '';
         g.seatType = '';
         g.seatStatus = 'available';
-        g.seatProps = o.props || {};
+        g.seatProps = props;
+        g.originalLabel = hasAccessibility ? '' : displayLabel;
+        g.set('seatLabel', g.seatLabel);
+        g.set('seatProps', g.seatProps);
         g.circle = circle;
         g.textObj = text;
         g.set('seatId', g.seatId);
@@ -5249,12 +5323,11 @@ window.fabricInterop = {
         const rectangleId = rectangle.rectangleId || rectangle.get("rectangleId");
         const category = rectangle.categoryName || rectangle.get("categoryName") || "General";
         const label = rectangle.generalLabel || rectangle.get("generalLabel") || "General Area";
-        // const capacity = rectangle.capacity || rectangle.get("capacity") || 0;
-        debugger;
-        const capacity = await getAvailableCount(chartId, label);
-        //const capacity = 0;
+        const availableCount = await getAvailableCount(chartId, category, label);
+        const chartCapacity = Number(rectangle.capacity || rectangle.get("capacity") || 0);
+        const capacity = availableCount === null ? chartCapacity : availableCount;
         const currentCount = rectangle.currentCount || rectangle.get("currentCount") || 0;
-        const maxAvailable = capacity;
+        const maxAvailable = Math.max(0, chartCapacity > 0 ? Math.min(Number(capacity) || 0, chartCapacity) : Number(capacity) || 0);
 
         if (!canvas.selectedGAAreas) canvas.selectedGAAreas = [];
         const existingIndex = canvas.selectedGAAreas.findIndex(area => area.id === rectangleId);
@@ -5348,7 +5421,7 @@ window.fabricInterop = {
         font-size: 13px;
         color: #6b7280;
     `;
-        subtitle.textContent = capacity > 0 ? `Available: ${capacity} tickets` : 'General Admission';
+        subtitle.textContent = `Available: ${maxAvailable} tickets`;
 
         titleSection.appendChild(title);
         titleSection.appendChild(subtitle);
@@ -5663,8 +5736,6 @@ window.fabricInterop = {
 
         increaseBtn.onclick = handleIncrease;
         decreaseBtn.onclick = handleDecrease;
-        increaseBtn.ontouchstart = handleIncrease;
-        decreaseBtn.ontouchstart = handleDecrease;
 
         // Confirm handler
         confirmBtn.onclick = (e) => {
@@ -5722,14 +5793,11 @@ window.fabricInterop = {
             this.sendGASelectionToParent(canvas);
         };
 
-        // Cancel handler
+        // Cancel closes the dialog without changing the current selection.
         cancelBtn.onclick = (e) => {
             e.stopPropagation();
-            this.updateRectangleLabelWithCount(canvas, rectangle, 0);
-            canvas.selectedGAAreas = [];
-            canvas.renderAll();
             this.closeSeatPopup();
-            this.sendGASelectionToParent(canvas);
+            canvas.renderAll();
         };
 
         // Close on backdrop click
@@ -6103,56 +6171,56 @@ window.fabricInterop = {
         }
     },
     updateRectangleLabelWithCount(canvas, rectangle, count) {
-        const existingLabel = canvas.getObjects().find(obj => (obj.id === rectangle.labelTextId && obj.type === 'text') || (obj.rectangleId === rectangle.rectangleId && obj.type === 'text'));
-        if (existingLabel && existingLabel.type === 'text') {
-            canvas.remove(existingLabel);
+        const relatedObjects = canvas.getObjects().filter(obj => obj.rectangleId === rectangle.rectangleId);
+        const relatedLabels = relatedObjects.filter(obj => ['text', 'textbox', 'i-text'].includes(obj.type));
+        relatedLabels.filter(obj => obj.isCountLabel).forEach(obj => canvas.remove(obj));
+        const baseLabels = relatedLabels.filter(obj => obj.isGeneralAreaBaseLabel || obj.isGeneralCapacityLabel);
+        const baseVisuals = [...baseLabels, ...relatedObjects.filter(obj => obj.isGeneralCapacityBadge)];
+
+        if (count === 0) {
+            baseVisuals.forEach(obj => obj.set('visible', true));
             rectangle.labelText = null;
             rectangle.labelTextId = null;
-        }
-        if (count === 0) {
-            const baseLabel = rectangle.baseLabel || rectangle.generalLabel || rectangle.get('generalLabel') || '';
-            if (baseLabel) {
-                const fontSize = Math.min(rectangle.height * 0.3, rectangle.width * 0.2, 16);
-                const finalFontSize = Math.max(fontSize, 12);
-                const labelId = `label-${rectangle.rectangleId}-${Date.now()}`;
-                const centerX = rectangle.left + rectangle.width / 2;
-                const centerY = rectangle.top + rectangle.height / 2;
+            rectangle.currentCount = 0;
+            rectangle.set('labelTextId', null);
+            rectangle.set('currentCount', 0);
+
+            const hasBaseName = baseLabels.some(obj => obj.isGeneralAreaBaseLabel) || relatedLabels.some(obj => !obj.isCountLabel);
+            const baseLabel = rectangle.baseLabel || rectangle.generalLabel || rectangle.get('generalLabel') || rectangle.rectangleLabel || '';
+            if (!hasBaseName && baseLabel) {
+                const center = rectangle.getCenterPoint();
                 const labelText = new fabric.Text(baseLabel, {
-                    fontSize: finalFontSize, fontWeight: "bold",
-                    fill: getContrastColor(rectangle.categoryId || rectangle.fill || "#000000"),
-                    originX: "center", originY: "center", left: centerX, top: centerY,
-                    selectable: false, evented: false, text: baseLabel,
-                    rectangleId: rectangle.rectangleId, isRectangleLabel: true,
-                    textAlign: 'center', id: labelId, baseText: baseLabel
+                    fontSize: Math.max(12, Math.min(rectangle.height * 0.3, rectangle.width * 0.2, 16)),
+                    fontWeight: 'bold', fill: getContrastColor(rectangle.categoryId || rectangle.fill || '#000000'),
+                    originX: 'center', originY: 'center', left: center.x, top: center.y,
+                    selectable: false, evented: false, rectangleId: rectangle.rectangleId,
+                    isRectangleLabel: true, textAlign: 'center', baseText: baseLabel
                 });
                 rectangle.labelText = labelText;
-                rectangle.labelTextId = labelId;
-                rectangle.set('labelTextId', labelId);
+                rectangle.labelTextId = `label-${rectangle.rectangleId}`;
+                labelText.id = rectangle.labelTextId;
+                rectangle.set('labelTextId', rectangle.labelTextId);
                 canvas.add(labelText);
                 canvas.bringToFront(labelText);
             }
-            rectangle.currentCount = 0;
-            rectangle.set('currentCount', 0);
             return;
         }
-        const fontSize = Math.min(rectangle.height * 0.4, rectangle.width * 0.3, 24);
-        const finalFontSize = Math.max(fontSize, 12);
-        const labelId = `label-${rectangle.rectangleId}-${Date.now()}`;
-        const centerX = rectangle.left + rectangle.width / 2;
-        const centerY = rectangle.top + rectangle.height / 2;
-        const countText = count.toString();
-        const labelText = new fabric.Text(countText, {
-            fontSize: finalFontSize, fontWeight: "bold",
-            fill: getContrastColor(rectangle.categoryId || rectangle.fill || "#000000"),
-            originX: "center", originY: "center", left: centerX, top: centerY,
-            selectable: false, evented: false, text: "✔ " + countText,
-            rectangleId: rectangle.rectangleId, isRectangleLabel: true,
-            textAlign: 'center', id: labelId, isCountLabel: true
+
+        baseVisuals.forEach(obj => obj.set('visible', false));
+        const center = rectangle.getCenterPoint();
+        const countText = String(count);
+        const labelText = new fabric.Text('✔ ' + countText, {
+            fontSize: Math.max(12, Math.min(rectangle.height * 0.4, rectangle.width * 0.3, 24)),
+            fontWeight: 'bold', fill: getContrastColor(rectangle.categoryId || rectangle.fill || '#000000'),
+            originX: 'center', originY: 'center', left: center.x, top: center.y,
+            selectable: false, evented: false, rectangleId: rectangle.rectangleId,
+            isRectangleLabel: true, isCountLabel: true, textAlign: 'center',
+            id: `label-${rectangle.rectangleId}-${Date.now()}`
         });
         rectangle.labelText = labelText;
-        rectangle.labelTextId = labelId;
+        rectangle.labelTextId = labelText.id;
         rectangle.currentCount = count;
-        rectangle.set('labelTextId', labelId);
+        rectangle.set('labelTextId', labelText.id);
         rectangle.set('currentCount', count);
         canvas.add(labelText);
         canvas.bringToFront(labelText);
@@ -7850,9 +7918,9 @@ window.fabricInterop = {
         saveState(canvas);
     },
     enablePreviewMode(canvasId, Seatdetails, ChartId) {
-        debugger;
         const canvas = this.canvases[canvasId];
         var seats = "";
+        this._chartId = ChartId;
         this.mode = "user";
         this.isDrawingSeats = false;
         canvas.selection = false;
@@ -7868,23 +7936,21 @@ window.fabricInterop = {
 
 
         canvas.forEachObject(obj => {
+            const isStandaloneText = obj.type === 'text' || obj.type === 'i-text' || obj.type === 'textbox';
             obj.selectable = false;
-            obj.evented = true;
+            obj.evented = !isStandaloneText;
             obj.lockMovementX = true;
             obj.lockMovementY = true;
             obj.hasControls = false;
-            obj.hoverCursor = 'default';
+            obj.hoverCursor = obj.objectType === 'genrectangle' ? 'pointer' : 'default';
             if (typeof obj.isSelected === 'undefined') {
                 obj.isSelected = false;
             }
 
-            // --- Handle standalone row‑label text objects ---
+            // Keep row labels visible unless the preview controls hide them.
             if ((obj.type === 'text' || obj.type === 'i-text' || obj.type === 'textbox') && obj.isRowLabel) {
-                if (typeof obj.originalLabel === 'undefined') {
-                    obj.originalLabel = obj.text || '';
-                }
-                obj.set('text', ''); // hide initially
-                return; // skip further processing
+                if (typeof obj.originalLabel === 'undefined') obj.originalLabel = obj.text || '';
+                return;
             }
 
             // --- Handle seat groups (existing logic) ---
@@ -7895,33 +7961,40 @@ window.fabricInterop = {
                     textChild = obj._objects.find(ch => (ch.type === 'text' || ch.type === 'i-text' || ch.type === 'textbox'));
                 }
                 if (textChild) {
-                    if (typeof obj.originalLabel === 'undefined') {
-                        obj.originalLabel = textChild.text || '';
-                    }
-                    textChild.set('text', '');
+                    if (typeof obj.originalLabel === 'undefined') obj.originalLabel = textChild.text || '';
                     obj.textObj = textChild;
                 }
             }
         });
         var showRowLbl = document.getElementById("chkrow");
-        var showSeatLbl = document.getElementById("chkseat");
-        var showRow = showRowLbl ? showRowLbl.checked : true;   // default to true if missing
-        var showSeat = showSeatLbl ? showSeatLbl.checked : true;
-        applyLabelVisibility(canvas, showRow, showSeat);
+        var showRow = showRowLbl ? showRowLbl.checked : true;
+        applyLabelVisibility(canvas, showRow, true);
         canvas.renderAll();
         canvas.on("mouse:over", function (opt) {
             if (!opt.target || opt.target.type !== "group") return;
-            let seat = opt.target;
-            const seatStatus = seat.seatStatus || seat.get('seatStatus') || 'available';
-            if (seatStatus == "sold") return;
-            let categoryId = seat.categoryName || seat.get("categoryName") || "";
-
-            showTooltip(opt.e.clientX, opt.e.clientY,
-                `Category : ${categoryId}<br>Seat : ${seat.seatId}`);
+            const seat = opt.target;
+            const categoryName = seat.categoryName || seat.get("categoryName") || "";
+            const priceObj = (window.globalPriceList || []).find(item => item.category === categoryName);
+            let price = "Unknown";
+            if (!priceObj || priceObj.ticketTypes == null) {
+                price = priceObj ? priceObj.price : "Unknown";
+            } else if (priceObj.ticketTypes.length) {
+                const prices = priceObj.ticketTypes.map(item => Number.parseFloat(item.price)).filter(Number.isFinite);
+                if (prices.length) price = `${Math.min(...prices)}-${Math.max(...prices)}`;
+            }
+            showSeatTooltip(opt.e.clientX, opt.e.clientY, seat, price);
         });
 
         canvas.on("mouse:out", function () {
             hideTooltip();
+        });
+
+        canvas.on("mouse:down", (opt) => {
+            const target = opt.target;
+            const objectType = target && (target.objectType || (target.get && target.get('objectType')));
+            const targetIsSeat = target && target.type === 'group' && (target.seatId || target.get('seatId'));
+            const area = objectType === 'genrectangle' ? target : targetIsSeat ? null : findGeneralAreaAtPointer(canvas, opt.e);
+            if (area) this.handleGenRectangleSelection(canvasId, area, opt.e, ChartId);
         });
     },
 
@@ -8971,6 +9044,142 @@ window.setGlobalPriceList = function (priceList) {
     window.globalPriceList = priceList;
 };
 
+function showSeatTooltip(x, y, seat, price) {
+    if (!document.getElementById('chartPreviewTooltipStyle')) {
+        const style = document.createElement('style');
+        style.id = 'chartPreviewTooltipStyle';
+        style.textContent = `
+            .chart-preview-tip{position:fixed;z-index:99999;display:none;pointer-events:none;box-sizing:border-box;width:min(300px,calc(100vw - 24px));min-height:120px;max-height:calc(100vh - 16px);overflow:auto;border:1px solid #e8ebf3;border-radius:14px;background:#fff;color:#202438;font:13px/1.45 system-ui,sans-serif;box-shadow:0 12px 32px #1e254033}
+            .cpt-identity{display:grid;grid-template-columns:1fr 1fr}
+            .cpt-identity-cell{display:flex;min-width:0;min-height:60px;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:8px}
+            .cpt-identity-cell+.cpt-identity-cell{border-left:1px solid #e8ebf3}
+            .cpt-label{color:#929292;font-size:10px;font-weight:700;letter-spacing:.04em;line-height:1.2;text-transform:uppercase}
+            .cpt-value{max-width:100%;overflow:hidden;color:#242424;font-size:24px;font-weight:700;line-height:1.15;text-overflow:ellipsis;white-space:nowrap}
+            .cpt-details{display:grid;grid-template-columns:1fr auto;gap:5px 12px;padding:8px 10px 10px;border-top:1px solid #edf0f5}
+            .cpt-detail-label{color:#7b8294}
+            .cpt-detail-value{color:#30364a;font-weight:650;text-align:right}
+            .cpt-status{padding:2px 8px;border-radius:999px;background:#f1f3f8;color:#50576a;font-size:11px;font-weight:700;text-align:center;text-transform:capitalize}
+            .cpt-status.available{background:#e8f7ef;color:#18794e}
+            .cpt-status.unavailable{background:#fff0ef;color:#b42318}
+            .cpt-accessibility{padding:9px 10px 10px;border-top:1px solid #edf0f5}
+            .cpt-accessibility-heading{display:flex;align-items:center;gap:6px;margin:0 0 6px;color:#68718a;font-size:10px;font-weight:700;letter-spacing:.065em;text-transform:uppercase}
+            .cpt-accessibility-mark{width:6px;height:6px;border-radius:50%;background:#6558d9}
+            .cpt-accessibility-list{display:flex;flex-wrap:wrap;gap:6px}
+            .cpt-accessibility-chip{display:inline-flex;max-width:100%;align-items:center;gap:8px;padding:5px 9px;border:0;border-radius:7px;background:#f5f6fb;color:#35405a;font-size:11px;font-weight:600;line-height:1.3}
+            .cpt-accessibility-chip svg{box-sizing:border-box;width:22px;height:22px;flex:none;padding:4px;border-radius:6px;background:#fff;color:#5145cd}
+            .cpt-accessibility-chip span{overflow-wrap:anywhere}
+        `;
+        document.head.appendChild(style);
+    }
+
+    let tip = document.getElementById('seatTooltip');
+    if (!tip) {
+        tip = document.createElement('div');
+        tip.id = 'seatTooltip';
+        document.body.appendChild(tip);
+    }
+    tip.replaceChildren();
+    tip.removeAttribute('style');
+    tip.className = 'chart-preview-tip';
+    tip.setAttribute('role', 'tooltip');
+
+    const addIdentity = (container, label, value, color) => {
+        const cell = document.createElement('div');
+        cell.className = 'cpt-identity-cell';
+        const key = document.createElement('span');
+        key.className = 'cpt-label';
+        key.textContent = label;
+        const val = document.createElement('span');
+        val.className = 'cpt-value';
+        val.style.color = color || '#242424';
+        val.textContent = value || '—';
+        cell.append(key, val);
+        container.appendChild(cell);
+    };
+    const identity = document.createElement('div');
+    identity.className = 'cpt-identity';
+    addIdentity(identity, seat.chartSeatType === 'table' ? 'Table' : 'Row', seat.rowLabel, seat.categoryId);
+    addIdentity(identity, 'Seat', seat.seatLabel, seat.categoryId);
+    tip.appendChild(identity);
+
+    const details = document.createElement('div');
+    details.className = 'cpt-details';
+    const addDetail = (label, value, status) => {
+        if (!value) return;
+        const key = document.createElement('span');
+        key.className = 'cpt-detail-label';
+        key.textContent = label;
+        const val = document.createElement('span');
+        val.className = status ? 'cpt-status' : 'cpt-detail-value';
+        if (status) {
+            const normalized = value.toLowerCase();
+            if (normalized === 'available') val.classList.add('available');
+            else if (/booked|sold|reserved|unavailable|occupied/.test(normalized)) val.classList.add('unavailable');
+        }
+        val.textContent = value;
+        details.append(key, val);
+    };
+    addDetail('Category', seat.categoryName || seat.get('categoryName'));
+    addDetail('Status', seat.seatStatus || seat.get('seatStatus') || 'Available', true);
+    if (price != null) addDetail('Price', String(price) === 'Unknown' ? 'Unknown' : '$' + price);
+    if (details.childNodes.length) tip.appendChild(details);
+
+    const props = seat.seatProps || (seat.get && seat.get('seatProps')) || {};
+    const names = { wheelchair: 'Wheelchair space', companion: 'Companion seat', accessible: 'Accessible seat', hear: 'Hearing impaired', cart: 'CART services', sign: 'Sign language interpretation', res: 'Restricted view', ver: 'Not suitable for vertigo sufferers', leg: 'Limited legroom', arm: 'Lift-up armrests' };
+    const icons = {
+        wheelchair: '<circle cx="10" cy="4" r="2" fill="currentColor"/><path d="M10 8v6h5l2 5M7 11a5 5 0 105 8" fill="none" stroke="currentColor" stroke-width="2"/>',
+        companion: '<circle fill="currentColor" cx="8" cy="5" r="2.2"/><path d="M4 20v-6a4 4 0 018 0v6M14 20v-4a3 3 0 016 0v4" fill="none" stroke="currentColor" stroke-width="2"/><circle fill="currentColor" cx="17" cy="8" r="2"/>',
+        accessible: '<circle fill="currentColor" cx="12" cy="4" r="2.2"/><path d="M12 8v7M7 11h10M12 15l-3 6M12 15l3 6" fill="none" stroke="currentColor" stroke-width="2"/>',
+        hear: '<path d="M7 9a5 5 0 0110 0c0 3-3 4-3 7a2.5 2.5 0 01-5 0M9.5 9a2.5 2.5 0 015 0" fill="none" stroke="currentColor" stroke-width="2"/>',
+        cart: '<path d="M4 6h16v12H4zM8 11h3M13 11h3M8 15h8" fill="none" stroke="currentColor" stroke-width="2"/>',
+        sign: '<path d="M8 13V5.5a1.5 1.5 0 013 0V11M11 10V4a1.5 1.5 0 013 0v7M14 10V5.5a1.5 1.5 0 013 0V13M17 9.5a1.5 1.5 0 013 0V14a7 7 0 01-7 7h-1a7 7 0 01-5.5-2.7L4 14.5" fill="none" stroke="currentColor" stroke-width="2"/>',
+        res: '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM3 3l18 18" fill="none" stroke="currentColor" stroke-width="2"/><circle fill="currentColor" cx="12" cy="12" r="2.4"/>',
+        ver: '<path d="M3 21h5v-5h5v-5h5V6M20 9v6M17.5 12.5l2.5 2.5 2.5-2.5" fill="none" stroke="currentColor" stroke-width="2"/>',
+        leg: '<path d="M7 3v10h8l2 8M4 21h16" fill="none" stroke="currentColor" stroke-width="2"/>',
+        arm: '<path d="M5 20v-6h14v6M7 14V9M17 14V9M12 4v5M9 6.5l3-3 3 3" fill="none" stroke="currentColor" stroke-width="2"/>'
+    };
+    const flags = ['hear', 'res', 'ver', 'leg', 'arm'];
+    const notes = [...new Set([props.acc, ...flags.filter(key => props[key]), ...(props.hear && props.cart ? ['cart'] : []), ...(props.hear && props.sign ? ['sign'] : [])].filter(key => key && names[key]))];
+    if (notes.length) {
+        const section = document.createElement('section');
+        section.className = 'cpt-accessibility';
+        section.setAttribute('aria-label', 'Accessibility features');
+        const heading = document.createElement('div');
+        heading.className = 'cpt-accessibility-heading';
+        const mark = document.createElement('span');
+        mark.className = 'cpt-accessibility-mark';
+        mark.setAttribute('aria-hidden', 'true');
+        const headingText = document.createElement('span');
+        headingText.textContent = 'Accessibility';
+        heading.append(mark, headingText);
+        section.appendChild(heading);
+        const list = document.createElement('div');
+        list.className = 'cpt-accessibility-list';
+        notes.forEach(key => {
+            const chip = document.createElement('span');
+            chip.className = 'cpt-accessibility-chip';
+            const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            icon.setAttribute('viewBox', '0 0 24 24');
+            icon.setAttribute('aria-hidden', 'true');
+            icon.innerHTML = icons[key] || icons.accessible;
+            const label = document.createElement('span');
+            label.textContent = names[key];
+            chip.append(icon, label);
+            list.appendChild(chip);
+        });
+        section.append(heading, list);
+        tip.appendChild(section);
+    }
+
+    tip.style.display = 'block';
+    const margin = 8, gap = 14, bounds = tip.getBoundingClientRect();
+    let left = x + gap, top = y + gap;
+    if (left + bounds.width > window.innerWidth - margin) left = x - bounds.width - gap;
+    if (top + bounds.height > window.innerHeight - margin) top = y - bounds.height - gap;
+    tip.style.left = Math.max(margin, Math.min(left, window.innerWidth - bounds.width - margin)) + 'px';
+    tip.style.top = Math.max(margin, Math.min(top, window.innerHeight - bounds.height - margin)) + 'px';
+}
+
 function showTooltip(x, y, htmlContent) {
     let tip = document.getElementById("seatTooltip");
     if (!tip) {
@@ -9431,18 +9640,22 @@ function drawGuideLines(direction, dx, dy) {
     canvas.bringToFront(crossGuideLine);
 }
 
-function saveHoldToken(chartId, selectedSeats, holdToken) {
-    debugger;
-    const url = `http://localhost:5045/api/chart/Update?chartId=${chartId}&seats=${selectedSeats}&holdToken=${holdToken}`;
+function saveHoldToken(chartId, selectedSeat, holdToken) {
+    const baseUrl = window.fabricInterop && window.fabricInterop.apiBase
+        ? window.fabricInterop.apiBase
+        : "https://highqcare.com/seating_api/api/chart";
+    const params = new URLSearchParams({
+        chartId: String(chartId),
+        seats: String(selectedSeat),
+        HoldToken: String(holdToken)
+    });
 
-    // const url = `https://localhost:7203/api/chart/Update?chartId=${chartId}&seats=${selectedSeats}&holdToken=${holdToken}`;
-    //const url = `http://dev.theticketworld.com/seating_api/api/chart/Update?chartId=${chartId}&seats=${selectedSeats}&holdToken=${holdToken}`;
-
-    fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chartId: chartId, seats: selectedSeats, holdtoken: holdToken })
-    }).then(res => res.json()).then(data => console.log("Saved:")).catch(err => console.error("Error:", err));
+    fetch(`${baseUrl}/Update?${params}`, { method: "POST" })
+        .then(response => {
+            if (!response.ok) throw new Error(`Seat hold request failed: HTTP ${response.status}`);
+            return response.text();
+        })
+        .catch(error => console.error("Failed to save seat hold:", error));
 }
 
 function showNotification(message, type = 'info', title = 'Notification') {
@@ -9566,10 +9779,13 @@ function saveChartAsNew() {
         saveCurrentChartWithNewId(newChartId);
     }
 }
-async function getAvailableCount(chartId, categoryName) {
-    debugger;
-    // const url = `https://localhost:7203/api/chart/GetCount?chartId=${chartId}&catname=${encodeURIComponent(categoryName)}`;
-    const url = `http://localhost:5045/api/chart/GetCount?chartId=${chartId}&catname=${encodeURIComponent(categoryName)}`;
+async function getAvailableCount(chartId, categoryName, areaLabel) {
+    const configuredBase = window.SeatingChartApiBase || (window.fabricInterop && window.fabricInterop.apiBase);
+    const isLocalHost = ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
+    const baseUrl = (configuredBase || (isLocalHost
+        ? "http://localhost:5045/api/chart"
+        : "https://highqcare.com/seating_api/api/chart")).replace(/\/$/, "");
+    const url = `${baseUrl}/GetCount?chartId=${encodeURIComponent(chartId)}&catname=${encodeURIComponent(categoryName)}&areaLabel=${encodeURIComponent(areaLabel)}`;
 
     try {
         const response = await fetch(url, {
@@ -9583,12 +9799,16 @@ async function getAvailableCount(chartId, categoryName) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
 
-        const count = await response.text(); // Since your API returns a string
-        return count; // Returns the count as a string
+        const countText = await response.text();
+        const count = Number.parseInt(countText.replace(/^\"|\"$/g, ""), 10);
+        if (!Number.isFinite(count)) {
+            throw new Error("The chart API returned an invalid available-seat count.");
+        }
+        return count;
     }
     catch (err) {
-        console.error("Error fetching count:", err);
-        return "0"; // Return "0" as default on error
+        console.error("Error fetching general-admission availability:", err);
+        return null;
     }
 }
 //function getAvailableCount(chartId, categoryName) {
