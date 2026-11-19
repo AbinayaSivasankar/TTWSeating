@@ -158,6 +158,7 @@ window.fabricInterop = {
         const parent = canvasElement.parentElement;
         // Sharp rendering: draw shapes at the real zoom and use the current screen density.
         fabric.Object.prototype.objectCaching = false;
+        if (fabric.Text && fabric.Text.prototype.textBaseline === 'alphabetical') fabric.Text.prototype.textBaseline = 'alphabetic';
         fabric.devicePixelRatio = window.devicePixelRatio || 1;
         canvas = new fabric.Canvas(canvasId, {
             selection: true,
@@ -1314,26 +1315,8 @@ window.fabricInterop = {
         canvas.on("mouse:over", function (opt) {
             if (!opt.target || opt.target.type !== "group") return;
             const seat = opt.target;
-            let categoryId = seat.categoryName || seat.get("categoryName") || "";
-            let priceObj = (window.globalPriceList || []).find(x => x.category === categoryId);
-            // let price = priceObj ? priceObj.price : "Unknown";
-            let price = "Unknown";
-            if (!priceObj || priceObj.ticketTypes == null) {
-                price = priceObj ? priceObj.price : "Unknown";
-            }
-            else {
-                //var a = priceObj.ticketTypes[0].price;
-                //var b = priceObj.ticketTypes[priceObj.ticketTypes.length - 1].price;
-                //price = priceObj.ticketTypes[0].price + "-" + priceObj.ticketTypes[priceObj.ticketTypes.length - 1].price;
-                var a = parseFloat(priceObj.ticketTypes[0].price);
-                var b = parseFloat(priceObj.ticketTypes[priceObj.ticketTypes.length - 1].price);
-
-                var minPrice = Math.min(a, b);
-                var maxPrice = Math.max(a, b);
-
-                price = minPrice + "-" + maxPrice;
-            }
-            showSeatTooltip(opt.e.clientX, opt.e.clientY, seat, price);
+            // ticketing site: show the category price (tolerant name match, empty ticketTypes safe)
+            showSeatTooltip(opt.e.clientX, opt.e.clientY, seat, resolveSeatPrice(seat));
         });
 
         canvas.on("mouse:out", function () {
@@ -1403,7 +1386,7 @@ window.fabricInterop = {
 
                 // Get category and price info
                 let categoryId = seat.categoryName || seat.get("categoryName") || "";
-                let priceObj = (window.globalPriceList || []).find(x => x.category === categoryId);
+                let priceObj = findSeatPriceObj(categoryId, seat.catId != null ? seat.catId : (seat.get && seat.get('catId')));
 
                 // Store the seat for later use
                 this._pendingSeatSelection = {
@@ -1441,9 +1424,7 @@ window.fabricInterop = {
                 obj.objectType === "genrectangle"
             );
 
-            let priceObj = (window.globalPriceList || []).find(
-                x => x.category === area.categoryName
-            );
+            let priceObj = findSeatPriceObj(area.categoryName, rectangle && rectangle.catId);
 
             let price = "Unknown";
             if (priceObj && priceObj.ticketTypes == null) {
@@ -1643,6 +1624,7 @@ window.fabricInterop = {
         }
         else {
             // No price info - show error or auto-select with default
+            console.warn('No price for seat category id "' + (seat.catId != null ? seat.catId : (seat.get && seat.get('catId'))) + '" (' + (seat.categoryName || (seat.get && seat.get('categoryName')) || '') + '). Price list: ' + ((Array.isArray(window.globalPriceList) ? window.globalPriceList : []).map(x => x && (x.Id + ' = ' + x.category)).join(', ') || '(none)') + '. The category id (or name) of the chart must match an entry in the price list.');
             showNotification('No pricing information available for this seat', 'warning');
             return;
         }
@@ -3301,7 +3283,7 @@ window.fabricInterop = {
             fill: gaColor + '2a', stroke: gaColor, strokeWidth: 1.5, strokeDashArray: [7, 5],
             selectable: false, evented: false, objectType: 'genrectangle', createdBy: 'designer',
             rectangleId: 'ga-' + shape.id, rectangleLabel: shape.label || '', generalLabel: shape.label || null,
-            capacity: shape.cap || 0, categoryId: gaColor, categoryName: this.getCategoryName(shape.cat)
+            capacity: shape.cap || 0, categoryId: gaColor, catId: shape.cat, categoryName: this.getCategoryName(shape.cat)
         };
         let area;
         if (shape.shape === 'poly' && Array.isArray(shape.pts) && shape.pts.length >= 3) {
@@ -3470,37 +3452,13 @@ window.fabricInterop = {
             originX: 'center', originY: 'center', selectable: false, evented: false
         });
         const children = [circle, text];
-        if (hasAccessibility) {
-            const iconStyle = { stroke: '#ffffff', strokeWidth: 1.3, strokeLineCap: 'round', strokeLineJoin: 'round', selectable: false, evented: false };
-            if (accessibilityType === 'wheelchair') {
-                children.push(new fabric.Circle({ radius: 0.9, left: o.x - 1.5, top: o.y - 5, fill: '#ffffff', originX: 'center', originY: 'center', selectable: false, evented: false }));
-                children.push(new fabric.Circle({ radius: 2.6, left: o.x - 1, top: o.y + 2, fill: 'transparent', stroke: '#ffffff', strokeWidth: 1.2, originX: 'center', originY: 'center', selectable: false, evented: false }));
-                children.push(new fabric.Line([o.x - 1.5, o.y - 3.8, o.x - 0.2, o.y - 0.2], iconStyle));
-                children.push(new fabric.Line([o.x - 0.2, o.y - 1.8, o.x + 3.2, o.y - 1.8], iconStyle));
-                children.push(new fabric.Line([o.x - 0.2, o.y - 0.2, o.x + 2, o.y + 1.3], iconStyle));
-            } else if (accessibilityType === 'companion') {
-                children.push(new fabric.Circle({ radius: 1.1, left: o.x - 2.3, top: o.y - 4, fill: '#ffffff', originX: 'center', originY: 'center', selectable: false, evented: false }));
-                children.push(new fabric.Circle({ radius: 1, left: o.x + 2.7, top: o.y - 3.5, fill: '#ffffff', originX: 'center', originY: 'center', selectable: false, evented: false }));
-                children.push(new fabric.Line([o.x - 2.3, o.y - 2.6, o.x - 2.3, o.y + 3.5], iconStyle));
-                children.push(new fabric.Line([o.x + 2.7, o.y - 2.5, o.x + 2.7, o.y + 3.5], iconStyle));
-                children.push(new fabric.Line([o.x - 4.5, o.y + 3.5, o.x - 0.4, o.y + 3.5], iconStyle));
-                children.push(new fabric.Line([o.x + 0.5, o.y + 3.5, o.x + 4.5, o.y + 3.5], iconStyle));
-            } else {
-                children.push(new fabric.Circle({ radius: 1.1, left: o.x, top: o.y - 4.7, fill: '#ffffff', originX: 'center', originY: 'center', selectable: false, evented: false }));
-                children.push(new fabric.Line([o.x, o.y - 3.2, o.x, o.y + 0.7], iconStyle));
-                children.push(new fabric.Line([o.x - 3.5, o.y - 1.8, o.x + 3.5, o.y - 1.8], iconStyle));
-                children.push(new fabric.Line([o.x, o.y + 0.7, o.x - 2.8, o.y + 4.5], iconStyle));
-                children.push(new fabric.Line([o.x, o.y + 0.7, o.x + 2.8, o.y + 4.5], iconStyle));
-            }
-        }
+        if (hasAccessibility) addDesignerSeatIcon(children, accessibilityType, o.x, o.y, 14, '#ffffff');
         const accessibilityFlags = ['hear', 'res', 'ver', 'leg', 'arm'].filter(key => props[key]);
         if (accessibilityFlags.length) {
             const badgeX = o.x + 8, badgeY = o.y - 8;
             children.push(new fabric.Circle({ radius: 5.6, left: badgeX, top: badgeY, fill: '#f59e0b', stroke: '#ffffff', strokeWidth: 1.2, originX: 'center', originY: 'center', selectable: false, evented: false }));
             if (accessibilityFlags.length === 1) {
-                const markStyle = { stroke: '#ffffff', strokeWidth: 0.9, strokeLineCap: 'round', strokeLineJoin: 'round', selectable: false, evented: false };
-                children.push(new fabric.Line([badgeX - 2.5, badgeY, badgeX + 2.5, badgeY], markStyle));
-                children.push(new fabric.Line([badgeX, badgeY - 2.5, badgeX, badgeY + 2.5], markStyle));
+                addDesignerSeatIcon(children, accessibilityFlags[0], badgeX, badgeY, 7.2, '#ffffff');
             } else {
                 children.push(new fabric.Text(String(accessibilityFlags.length), { left: badgeX, top: badgeY, fontSize: 7, fontWeight: 'bold', fill: '#ffffff', originX: 'center', originY: 'center', selectable: false, evented: false }));
             }
@@ -8013,16 +7971,7 @@ window.fabricInterop = {
         canvas.on("mouse:over", function (opt) {
             if (!opt.target || opt.target.type !== "group") return;
             const seat = opt.target;
-            const categoryName = seat.categoryName || seat.get("categoryName") || "";
-            const priceObj = (window.globalPriceList || []).find(item => item.category === categoryName);
-            let price = "Unknown";
-            if (!priceObj || priceObj.ticketTypes == null) {
-                price = priceObj ? priceObj.price : "Unknown";
-            } else if (priceObj.ticketTypes.length) {
-                const prices = priceObj.ticketTypes.map(item => Number.parseFloat(item.price)).filter(Number.isFinite);
-                if (prices.length) price = `${Math.min(...prices)}-${Math.max(...prices)}`;
-            }
-            showSeatTooltip(opt.e.clientX, opt.e.clientY, seat, price);
+            showSeatTooltip(opt.e.clientX, opt.e.clientY, seat, resolveSeatPrice(seat));
         });
 
         canvas.on("mouse:out", function () {
@@ -9078,9 +9027,84 @@ function sendSelectedSeatsToParent(selectedSeats) {
 window.setGlobalPriceList = function (priceList) {
     console.log("Price list received in Blazor:", priceList);
     window.globalPriceList = priceList;
+    if (!Array.isArray(priceList) || !priceList.length) console.warn('setGlobalPriceList received no prices - seat tooltips and ticket selection need [{ category, price | ticketTypes }].');
 };
 
-function showSeatTooltip(x, y, seat, price) {
+// Same icon geometry as the chart editor (SI) so seats look identical in the editor and on the ticketing site.
+const DESIGNER_SEAT_ICONS = {
+    wheelchair: { c: [[10, 4, 2]], p: ['M10 8v6h5l2 5M7 11a5 5 0 1 0 5 8'] },
+    companion: { c: [[8, 5, 2.2], [17, 8, 2]], p: ['M4 20v-6a4 4 0 0 1 8 0v6', 'M14 20v-4a3 3 0 0 1 6 0v4'] },
+    accessible: { c: [[12, 4, 2.2]], p: ['M12 8v7M7 11h10M12 15l-3 6M12 15l3 6'] },
+    hear: { p: ['M7 9a5 5 0 0 1 10 0c0 3-3 4-3 7a2.5 2.5 0 0 1-5 0M9.5 9a2.5 2.5 0 0 1 5 0'] },
+    res: { c: [[12, 12, 2.4]], p: ['M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM3 3l18 18'] },
+    ver: { p: ['M3 21h5v-5h5v-5h5V6M20 9v6M17.5 12.5l2.5 2.5 2.5-2.5'] },
+    leg: { p: ['M7 3v10h8l2 8M4 21h16'] },
+    arm: { p: ['M5 20v-6h14v6M7 14V9M17 14V9M12 4v5M9 6.5l3-3 3 3'] }
+};
+function addDesignerSeatIcon(children, key, cx, cy, size, color) {
+    const def = DESIGNER_SEAT_ICONS[key];
+    if (!def) return false;
+    const k = size / 24, ox = cx - size / 2, oy = cy - size / 2;
+    (def.p || []).forEach(d => {
+        const path = new fabric.Path(d, { fill: '', stroke: color, strokeWidth: 2, strokeLineCap: 'round', strokeLineJoin: 'round', selectable: false, evented: false, objectCaching: false });
+        path.set({ originX: 'center', originY: 'center', scaleX: k, scaleY: k, left: ox + path.pathOffset.x * k, top: oy + path.pathOffset.y * k });
+        children.push(path);
+    });
+    (def.c || []).forEach(([x, y, r]) => children.push(new fabric.Circle({ radius: r * k, left: ox + x * k, top: oy + y * k, fill: color, originX: 'center', originY: 'center', selectable: false, evented: false })));
+    return true;
+}
+
+// Price entry for a seat category. Connected by category id first (the chart category id carried by the seat),
+// then by name (ignores spaces / capitals). Used by the tooltip and by the seat / area click.
+// Fields of a price-list entry that can hold the chart category id - the first one that matches wins.
+const PRICE_CATEGORY_ID_FIELDS = ['catId', 'cat_id', 'chartCatId', 'chart_cat_id', 'chartCategoryId', 'chart_category_id', 'categoryId', 'category_id', 'Id'];
+function findSeatPriceObj(categoryName, catId) {
+    const norm = v => String(v == null ? '' : v).trim().toLowerCase();
+    const list = Array.isArray(window.globalPriceList) ? window.globalPriceList : [];
+    const id = norm(catId);
+    if (id) {
+        for (const field of PRICE_CATEGORY_ID_FIELDS) {
+            const hit = list.find(x => x && x[field] != null && norm(x[field]) === id);
+            if (hit) return hit;
+        }
+    }
+    const name = norm(categoryName);
+    return name ? list.find(x => x && norm(x.category) === name) : undefined;
+}
+
+function seatTooltipPrice(categoryName, catId) {
+    const priceObj = findSeatPriceObj(categoryName, catId);
+    if (!priceObj) return '';
+    const num = v => Number.parseFloat(String(v == null ? '' : v).replace(/[^0-9.]/g, ''));
+    const types = Array.isArray(priceObj.ticketTypes)
+        ? priceObj.ticketTypes.map(t => num(t && (t.price != null ? t.price : t.amount))).filter(Number.isFinite)
+        : [];
+    if (types.length) {
+        const lo = Math.min(...types), hi = Math.max(...types);
+        return lo === hi ? String(lo) : lo + '-' + hi;
+    }
+    const single = num(priceObj.price);
+    return Number.isFinite(single) ? String(single) : '';
+}
+
+function resolveSeatPrice(seat) {
+    const get = k => seat[k] != null ? seat[k] : (seat.get ? seat.get(k) : undefined);
+    return seatTooltipPrice(get('categoryName'), get('catId'));
+}
+
+// Re-position the open tooltip next to the pointer (flip / clamp at the screen edges) without rebuilding it.
+function moveSeatTooltip(x, y) {
+    const tip = document.getElementById('seatTooltip');
+    if (!tip || tip.style.display === 'none') return;
+    const margin = 8, gap = 16, bounds = tip.getBoundingClientRect();
+    let left = x + gap, top = y + gap;
+    if (left + bounds.width > window.innerWidth - margin) left = x - bounds.width - gap;
+    if (top + bounds.height > window.innerHeight - margin) top = y - bounds.height - gap;
+    tip.style.left = Math.max(margin, Math.min(left, window.innerWidth - bounds.width - margin)) + 'px';
+    tip.style.top = Math.max(margin, Math.min(top, window.innerHeight - bounds.height - margin)) + 'px';
+}
+
+function showSeatTooltip(x, y, seat, price, showPrice = true) {
     const STYLE_ID = 'chartPreviewTooltipStyle';
     const oldStyle = document.getElementById(STYLE_ID);
     if (oldStyle && oldStyle.dataset.v !== '3') oldStyle.remove();
@@ -9159,7 +9183,7 @@ function showSeatTooltip(x, y, seat, price) {
         const parts = String(price).split('-').map(p => p.trim()).filter(Boolean);
         return parts.length === 2 && parts[0] !== parts[1] ? '$' + parts[0] + ' – $' + parts[1] : '$' + parts[0];
     })();
-    if (priceText) cell('Price', priceText, 'price');
+    if (showPrice && priceText) cell('Price', priceText, 'price');
     tip.appendChild(main);
 
     // accessibility
@@ -9198,32 +9222,9 @@ function showSeatTooltip(x, y, seat, price) {
         tip.appendChild(section);
     }
 
+    // place next to the pointer, flipping and clamping so it never leaves the screen
     tip.style.display = 'block';
-    placeSeatTooltip(tip, x, y);
-}
-
-// next to the pointer, flipping and clamping so it never leaves the screen
-function placeSeatTooltip(tip, x, y) {
-    const margin = 8, gap = 16, bounds = tip.getBoundingClientRect();
-    let left = x + gap, top = y + gap;
-    if (left + bounds.width > window.innerWidth - margin) left = x - bounds.width - gap;
-    if (top + bounds.height > window.innerHeight - margin) top = y - bounds.height - gap;
-    tip.style.left = Math.max(margin, Math.min(left, window.innerWidth - bounds.width - margin)) + 'px';
-    tip.style.top = Math.max(margin, Math.min(top, window.innerHeight - bounds.height - margin)) + 'px';
-}
-
-function moveSeatTooltip(x, y) {
-    const tip = document.getElementById('seatTooltip');
-    if (tip && tip.style.display === 'block') placeSeatTooltip(tip, x, y);
-}
-
-// Price text for a category from the global price list (empty when there is none).
-function seatTooltipPrice(categoryName) {
-    const priceObj = (window.globalPriceList || []).find(item => item.category === categoryName);
-    if (!priceObj) return null;
-    if (priceObj.ticketTypes == null) return priceObj.price;
-    const prices = priceObj.ticketTypes.map(item => Number.parseFloat(item.price)).filter(Number.isFinite);
-    return prices.length ? Math.min(...prices) + '-' + Math.max(...prices) : null;
+    moveSeatTooltip(x, y);
 }
 
 function showTooltip(x, y, htmlContent) {
@@ -9915,13 +9916,13 @@ async function getAvailableCount(chartId, categoryName, areaLabel) {
             const c = catMap(cats, s.cat).color, cc = center(s), g = svgEl('g', { transform: `rotate(${s.rot || 0} ${cc.x} ${cc.y})` }, svg);
             if (s.type === 'row') {
                 const q = rowSeats(s); q.p.forEach((p, i) => {
-                    const sd = (s.sd && s.sd[i]) || {}, seatName = (s.label || '') + '-' + (sd.label || p.l), db = seatLookup.get(seatName), cat = catMap(cats, sd.cat || s.cat), fill = cat.color, seatLabel = sd.label || p.l; const circle = svgEl('circle', { cx: p.x, cy: p.y, r: R, fill, stroke: '#fff', 'stroke-width': 1.5, 'data-seat': seatName, tabindex: 0, 'aria-label': `Row ${s.label || ''}, seat ${seatLabel}, ${cat.name}${db?.status ? ', ' + db.status : ''}` }, g); const tip = { type: 'Row', section: s.label || s.section || '', seat: seatLabel, category: cat.name, color: cat.color, status: db?.status || '', notes: seatAccNotes(sd), props: sd }; circle.addEventListener('mouseenter', e => showTip(host, tip, e)); circle.addEventListener('mouseleave', hideTip); circle.addEventListener('focus', e => showTip(host, tip, e)); circle.addEventListener('blur', hideTip); const hasAcc = sd.acc && SI[sd.acc], fk = FLAGS.filter(k => sd[k]);
+                    const sd = (s.sd && s.sd[i]) || {}, seatName = (s.label || '') + '-' + (sd.label || p.l), db = seatLookup.get(seatName), cat = catMap(cats, sd.cat || s.cat), fill = cat.color, seatLabel = sd.label || p.l; const circle = svgEl('circle', { cx: p.x, cy: p.y, r: R, fill, stroke: '#fff', 'stroke-width': 1.5, 'data-seat': seatName, tabindex: 0, 'aria-label': `Row ${s.label || ''}, seat ${seatLabel}, ${cat.name}${db?.status ? ', ' + db.status : ''}` }, g); const tip = { type: 'Row', section: s.label || s.section || '', seat: seatLabel, category: cat.name, catId: cat.id, color: cat.color, status: db?.status || '', notes: seatAccNotes(sd), props: sd }; circle.addEventListener('mouseenter', e => showTip(host, tip, e)); circle.addEventListener('mouseleave', hideTip); circle.addEventListener('focus', e => showTip(host, tip, e)); circle.addEventListener('blur', hideTip); const hasAcc = sd.acc && SI[sd.acc], fk = FLAGS.filter(k => sd[k]);
                     if (hasAcc) svgEl('g', { style: 'color:#fff', transform: `translate(${p.x - 7} ${p.y - 7}) scale(${14 / 24})`, 'pointer-events': 'none' }, g).innerHTML = SI[sd.acc];
                     else if (showSeats) text(g, p.x, p.y + 3, sd.label || p.l, { 'text-anchor': 'middle', 'font-size': 8, 'font-weight': 600, fill: '#fff', 'pointer-events': 'none' });
                     if (fk.length) { const bx = p.x + R - 1, by = p.y - R + 1; svgEl('circle', { cx: bx, cy: by, r: 5.6, fill: '#f59e0b', stroke: '#fff', 'stroke-width': 1.2, 'pointer-events': 'none' }, g); if (fk.length === 1) svgEl('g', { style: 'color:#fff', transform: `translate(${bx - 3.6} ${by - 3.6}) scale(${7.2 / 24})`, 'pointer-events': 'none' }, g).innerHTML = SI[fk[0]]; else text(g, bx, by + 3, fk.length, { 'text-anchor': 'middle', 'font-size': 8, 'font-weight': 700, fill: '#fff', 'pointer-events': 'none' }); }
                 }); const l = q.p[0].x <= q.p[q.p.length - 1].x ? q.p[0] : q.p[q.p.length - 1]; if (showRows && s.lblOn !== false) text(g, l.x - 22, l.y + 4, s.label, { 'text-anchor': 'middle', 'font-size': 12, 'font-weight': 700, fill: '#64708f' });
             }
-            else if (s.type === 'table') { const tableFill = c + '33', stroke = c; if (s.shape === 'rect') svgEl('rect', { x: s.x - s.w / 2, y: s.y - s.h / 2, width: s.w, height: s.h, rx: 8, fill: tableFill, stroke, 'stroke-width': 1.5 }, g); else svgEl('circle', { cx: s.x, cy: s.y, r: s.r, fill: tableFill, stroke, 'stroke-width': 1.5 }, g); tableSeats(s).forEach((p, i) => { const cat = catMap(cats, s.cat), seatName = (s.label || 'T') + '-' + (i + 1), db = seatLookup.get(seatName), tip = { type: 'Table', section: s.label || '—', seat: String(i + 1), category: cat.name, color: cat.color, status: db?.status || '', notes: [] }; const el = svgEl('circle', { cx: p.x, cy: p.y, r: R, fill: cat.color, stroke: '#fff', 'stroke-width': 1.5, tabindex: 0, 'data-seat': seatName, 'aria-label': `Table ${s.label || ''}, seat ${i + 1}, ${cat.name}${db?.status ? ', ' + db.status : ''}` }, g); el.addEventListener('mouseenter', e => showTip(host, tip, e)); el.addEventListener('mouseleave', hideTip); el.addEventListener('focus', e => showTip(host, tip, e)); el.addEventListener('blur', hideTip); if (showSeats) text(g, p.x, p.y + 3, String(i + 1), { 'text-anchor': 'middle', 'font-size': 8, 'font-weight': 600, fill: '#fff', 'pointer-events': 'none' }); }); text(g, s.x, s.y + 4, s.label, { 'text-anchor': 'middle', 'font-size': 13, 'font-weight': 700, fill: '#1e2540' }); }
+            else if (s.type === 'table') { const tableFill = c + '33', stroke = c; if (s.shape === 'rect') svgEl('rect', { x: s.x - s.w / 2, y: s.y - s.h / 2, width: s.w, height: s.h, rx: 8, fill: tableFill, stroke, 'stroke-width': 1.5 }, g); else svgEl('circle', { cx: s.x, cy: s.y, r: s.r, fill: tableFill, stroke, 'stroke-width': 1.5 }, g); tableSeats(s).forEach((p, i) => { const cat = catMap(cats, s.cat), seatName = (s.label || 'T') + '-' + (i + 1), db = seatLookup.get(seatName), tip = { type: 'Table', section: s.label || '—', seat: String(i + 1), category: cat.name, catId: cat.id, color: cat.color, status: db?.status || '', notes: [] }; const el = svgEl('circle', { cx: p.x, cy: p.y, r: R, fill: cat.color, stroke: '#fff', 'stroke-width': 1.5, tabindex: 0, 'data-seat': seatName, 'aria-label': `Table ${s.label || ''}, seat ${i + 1}, ${cat.name}${db?.status ? ', ' + db.status : ''}` }, g); el.addEventListener('mouseenter', e => showTip(host, tip, e)); el.addEventListener('mouseleave', hideTip); el.addEventListener('focus', e => showTip(host, tip, e)); el.addEventListener('blur', hideTip); if (showSeats) text(g, p.x, p.y + 3, String(i + 1), { 'text-anchor': 'middle', 'font-size': 8, 'font-weight': 600, fill: '#fff', 'pointer-events': 'none' }); }); text(g, s.x, s.y + 4, s.label, { 'text-anchor': 'middle', 'font-size': 13, 'font-weight': 700, fill: '#1e2540' }); }
             else if (s.type === 'icon') { const ig = svgEl('g', { transform: `translate(${s.x - s.size / 2} ${s.y - s.size / 2}) scale(${s.size / 24})`, style: `color:${s.color || '#1e2540'}` }, g); ig.innerHTML = ICONS[s.ic] || ''; }
             else if (s.type === 'line') { const dx = s.x2 - s.x1, dy = s.y2 - s.y1, len = Math.hypot(dx, dy) || 1, ux = dx / len, uy = dy / len, hs = 6 + (s.w || 3) * 2; svgEl('line', { x1: s.x1, y1: s.y1, x2: s.arrow ? s.x2 - ux * hs * .6 : s.x2, y2: s.arrow ? s.y2 - uy * hs * .6 : s.y2, stroke: s.color || '#1e2540', 'stroke-width': s.w || 3, 'stroke-dasharray': s.dash || '0' }, g); if (s.arrow) svgEl('polygon', { points: `${s.x2},${s.y2} ${s.x2 - ux * hs - uy * hs * .5},${s.y2 - uy * hs + ux * hs * .5} ${s.x2 - ux * hs + uy * hs * .5},${s.y2 - uy * hs - ux * hs * .5}`, fill: s.color || '#1e2540' }, g); }
             else if (s.type === 'text') text(g, s.x, s.y, s.text || 'Text', { 'font-size': s.size || 18, 'font-weight': 600, fill: s.color || '#1e2540' });
@@ -9929,17 +9930,20 @@ async function getAvailableCount(chartId, categoryName, areaLabel) {
             else { const isRect = s.type === 'rect', shape = s.shape || 'rect'; if (shape === 'poly' && s.pts) svgEl('polygon', { points: s.pts.map(p => `${p.x},${p.y}`).join(' '), fill: isRect ? '#e6e9f4' : c + '2a', stroke: isRect ? '#b9c1da' : c, 'stroke-width': 1.5, 'stroke-dasharray': s.type === 'general' ? '7 5' : '0' }, g); else if (shape === 'circle') svgEl('ellipse', { cx: s.x + s.w / 2, cy: s.y + s.h / 2, rx: s.w / 2, ry: s.h / 2, fill: isRect ? '#e6e9f4' : c + '2a', stroke: isRect ? '#b9c1da' : c, 'stroke-width': 1.5, 'stroke-dasharray': s.type === 'general' ? '7 5' : '0' }, g); else svgEl('rect', { x: s.x, y: s.y, width: s.w, height: s.h, rx: 10, fill: isRect ? '#e6e9f4' : c + '2a', stroke: isRect ? '#b9c1da' : c, 'stroke-width': 1.5, 'stroke-dasharray': s.type === 'general' ? '7 5' : '0' }, g); text(g, s.x + s.w / 2, s.y + s.h / 2 + 5, s.label || '', { 'text-anchor': 'middle', 'font-size': 14, 'font-weight': 600, fill: '#1e2540' }); if (s.type === 'general') text(g, s.x + s.w / 2, s.y + s.h / 2 + 23, (s.cap || 0) + ' capacity', { 'text-anchor': 'middle', 'font-size': 11, fill: '#7a85a6' }); }
         });
     }
+    // The preview uses the same card as the interactive chart (showSeatTooltip): one design, one stylesheet.
     function showTip(host, details, event) {
-        const seat = { rowLabel: details.section, seatLabel: details.seat, chartSeatType: details.type === 'Table' ? 'table' : 'row', categoryName: details.category, categoryId: details.color, seatStatus: details.status || 'Available', seatProps: details.props || {} };
-        const target = event && event.currentTarget;
-        const at = e => { if (e && e.clientX) return { x: e.clientX, y: e.clientY }; const r = target && target.getBoundingClientRect ? target.getBoundingClientRect() : null; return r ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : { x: 0, y: 0 }; };
-        const p = at(event);
-        showSeatTooltip(p.x, p.y, seat, seatTooltipPrice(details.category));
-        host.onmousemove = e => { const q = at(e); moveSeatTooltip(q.x, q.y); };
+        const el = event && event.currentTarget;
+        let x = event && event.clientX, y = event && event.clientY;
+        if (!x && !y && el && el.getBoundingClientRect) { const r = el.getBoundingClientRect(); x = r.left + r.width / 2; y = r.top + r.height / 2; }   // keyboard focus: sit next to the seat
+        showSeatTooltip(x || 0, y || 0, {
+            categoryId: details.color, categoryName: details.category, seatStatus: details.status || 'Available',
+            chartSeatType: details.type === 'Table' ? 'table' : 'row', rowLabel: details.section, seatLabel: details.seat, seatProps: details.props || {}
+        }, seatTooltipPrice(details.category, details.catId));
+        host.onmousemove = e => moveSeatTooltip(e.clientX, e.clientY);   // follow the cursor without rebuilding the card
     }
     function showLoader(id) { const h = document.getElementById(id); if (!h) return; if (!document.getElementById('chartPreviewLoaderStyle')) { const st = document.createElement('style'); st.id = 'chartPreviewLoaderStyle'; st.textContent = '.cp-loader{position:absolute;inset:0;min-height:300px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#fff;font:600 13px system-ui,sans-serif;color:#6b7694}.cp-loader i{width:40px;height:40px;border:4px solid #e4e8f2;border-top-color:#4f46e5;border-radius:50%;animation:cpSpin .8s linear infinite}@keyframes cpSpin{to{transform:rotate(360deg)}}'; document.head.appendChild(st) } h.style.position = 'relative'; hideLoader(id); const l = document.createElement('div'); l.className = 'cp-loader'; l.innerHTML = '<i></i><span>Loading chart…</span>'; h.appendChild(l) }
     function hideLoader(id) { const h = document.getElementById(id); if (h) h.querySelectorAll('.cp-loader').forEach(x => x.remove()) }
-    function hideTip() { const t = document.getElementById('seatTooltip'); if (t) t.style.display = 'none' }
+    function hideTip() { hideTooltip() }
     global.chartPreviewRenderer = { render, showLoader, hideLoader, toggleRowLabels() { showRows = !showRows; if (lastRender) render(lastRender.containerId, lastRender.chartJson, lastRender.seatsJson); return showRows; }, toggleSeatLabels() { showSeats = !showSeats; if (lastRender) render(lastRender.containerId, lastRender.chartJson, lastRender.seatsJson); return showSeats; } };
 })(window);
 

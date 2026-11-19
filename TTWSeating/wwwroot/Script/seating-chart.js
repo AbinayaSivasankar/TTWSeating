@@ -1,6 +1,6 @@
 ﻿// seating-chart.js
 window.SeatingChart = class SeatingChart {
-   
+
     constructor(containerId, chartId, secretkey, options = {}) {
         debugger;
         this.containerId = containerId;
@@ -60,6 +60,9 @@ window.SeatingChart = class SeatingChart {
 
             // Load JSON onto Canvas
             window.fabricInterop.loadLayout(this.canvasId, data.chart_json);
+
+            // Prices for the seat tooltip: pass options.priceList ([{ category, price | ticketTypes:[{price}] }]) or call window.setGlobalPriceList yourself.
+            if (Array.isArray(this.options.priceList) && typeof window.setGlobalPriceList === 'function') window.setGlobalPriceList(this.options.priceList);
 
             // The embedded ticketing chart is interactive by default; retain select mode as an explicit opt-in.
             if (this.options.mode === 'select') {
