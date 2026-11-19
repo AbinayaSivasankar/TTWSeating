@@ -35,12 +35,33 @@ let crossGuideLine = null;
 let rowBaseline = null;
 let lastRowPosition = null;
 
-function findGeneralAreaAtPointer(canvas, event) {
+function findGeneralAreaAtPointer(canvas, event, target, subTargets) {
+    const objects = canvas.getObjects();
+    const candidates = [target, ...(subTargets || [])].filter(Boolean);
+    for (const candidate of candidates) {
+        const objectType = candidate.objectType || (candidate.get && candidate.get('objectType'));
+        if (objectType === 'genrectangle') return candidate;
+        const rectangleId = candidate.rectangleId || (candidate.get && candidate.get('rectangleId'));
+        if (rectangleId) {
+            const linkedArea = objects.find(obj => {
+                const type = obj.objectType || (obj.get && obj.get('objectType'));
+                const id = obj.rectangleId || (obj.get && obj.get('rectangleId'));
+                return type === 'genrectangle' && id === rectangleId;
+            });
+            if (linkedArea) return linkedArea;
+        }
+    }
+    if (!event) return null;
     const pointer = canvas.getPointer(event);
     const point = new fabric.Point(pointer.x, pointer.y);
-    return canvas.getObjects().find(obj => {
+    return objects.slice().reverse().find(obj => {
         const objectType = obj.objectType || (obj.get && obj.get('objectType'));
-        return objectType === 'genrectangle' && obj.containsPoint(point);
+        if (objectType !== 'genrectangle') return false;
+        if (obj.containsPoint(point)) return true;
+        if (obj.type === 'polygon') return false;
+        const bounds = obj.getBoundingRect();
+        return pointer.x >= bounds.left && pointer.x <= bounds.left + bounds.width &&
+            pointer.y >= bounds.top && pointer.y <= bounds.top + bounds.height;
     }) || null;
 }
 
@@ -132,11 +153,14 @@ window.fabricInterop = {
     initCanvas(canvasId, width, height) {
         undoStack = [];
         redoStack = [];
-        this.resetChartState("seatCanvas");
+        this.resetChartState(canvasId);
+        const canvasElement = document.getElementById(canvasId);
+        const parent = canvasElement.parentElement;
         canvas = new fabric.Canvas(canvasId, {
             selection: true,
-            width: document.getElementById(canvasId).parentElement.clientWidth,
-            height: document.getElementById(canvasId).parentElement.clientHeight
+            enableRetinaScaling: true,
+            width: width || parent.clientWidth || canvasElement.clientWidth,
+            height: height || parent.clientHeight || canvasElement.clientHeight
         });
         //hide resize handler of the selection box except left and right
         fabric.Object.prototype.setControlsVisibility({
@@ -528,9 +552,8 @@ window.fabricInterop = {
             if (this.mode === "select") {
                 var ddlcolor = document.getElementById("ddlcolor");
                 if (ddlcolor) {
-                    document.getElementById("ddlcolor").value = "";
+                    ddlcolor.value = "";
                 }
-                this.handleRowSelection(canvas, e);
                 this.handleSelectionChanged(canvasId, e);
                 this.populateRowProperties(canvasId);
                 this.populateRectangleProperties(canvasId);
@@ -539,7 +562,6 @@ window.fabricInterop = {
 
         canvas.on('selection:updated', (e) => {
             if (this.mode === "select") {
-                this.handleRowSelection(canvas, e);
                 this.handleSelectionChanged(canvasId, e);
                 this.populateRowProperties(canvasId);
                 this.populateRectangleProperties(canvasId);
@@ -1236,7 +1258,6 @@ window.fabricInterop = {
     //    });
     //},
     enableUserMode(canvasId, Seatdetails, ChartId) {
-        debugger;
         const canvas = this.canvases[canvasId];
         var seats = "";
         this.mode = "user";
@@ -1320,11 +1341,8 @@ window.fabricInterop = {
         canvas.on("mouse:down", (opt) => {
             let seat = opt.target;
             const targetType = seat && (seat.objectType || (seat.get && seat.get('objectType')));
-            const isSeatGroup = seat && seat.type === 'group' && (seat.seatId || seat.get('seatId'));
-
-            if (targetType !== 'genrectangle' && !isSeatGroup) {
-                seat = findGeneralAreaAtPointer(canvas, opt.e) || seat;
-            }
+            const generalArea = targetType === 'genrectangle' ? seat : findGeneralAreaAtPointer(canvas, opt.e, seat, opt.subTargets);
+            if (generalArea) seat = generalArea;
 
             if (!seat) {
                 // Check if click was on a seat at this position (for row labels or empty space)
@@ -1347,11 +1365,12 @@ window.fabricInterop = {
                 let seatStatus = 'available';
                 for (var item of Seatdetails) {
                     if (item.seat_name == seat.seatId) {
-                        seatStatus = item.status;
+                        seatStatus = item.status || 'available';
+                        break;
                     }
                 }
 
-                if (seatStatus === 'sold' || seatStatus === 'booked' || seatStatus == "Reserved") {
+                if (['sold', 'booked', 'reserved'].includes(String(seatStatus).toLowerCase())) {
                     return;
                 }
 
@@ -1432,6 +1451,8 @@ window.fabricInterop = {
 
                 allSelections.push({
                     id: area.categoryName || rectangle?.categoryName || "General",
+                    areaId: area.id,
+                    selectionId: `${area.id}-${i + 1}`,
                     label: area.label || area.categoryName || "General Area",
                     categoryId: rectangle?.categoryId || "",
                     categoryName: area.categoryName || rectangle?.categoryName || "",
@@ -1628,7 +1649,6 @@ window.fabricInterop = {
 
         // Add ticket type options
         ticketTypes.forEach((ticketType, index) => {
-            debugger;
             const optionDiv = document.createElement('div');
             optionDiv.className = 'ticket-type-option';
 
@@ -1657,7 +1677,6 @@ window.fabricInterop = {
                 // Confirm selection with the chosen ticket type
                 const selectedPrice = parseFloat(optionDiv.dataset.price);
                 const selectedName = optionDiv.dataset.name;
-                debugger;
                 this.confirmSeatSelection(canvasId, seat, priceObj, selectedPrice, selectedName);
             });
 
@@ -1704,7 +1723,6 @@ window.fabricInterop = {
         document.addEventListener('keydown', handleEsc);
     },
     confirmSeatSelection(canvasId, seat, priceObj, selectedPrice, ticketTypeName) {
-        debugger;
         const canvas = this.canvases[canvasId];
         const popup = document.getElementById('ticketTypePopup');
 
@@ -1787,12 +1805,13 @@ window.fabricInterop = {
             let color;
             for (var item of SeatInfo) {
                 if (item.seat_name == seat.seatId) {
+                    const status = String(item.status || 'available').toLowerCase();
                     seat.seatStatus = item.status || 'available';
                     seat.set('seatStatus', seat.seatStatus);
-                    switch (item.status) {
+                    switch (status) {
                         case 'sold':
                         case 'booked':
-                        case 'Reserved':
+                        case 'reserved':
                             color = "#e7e7e7";
                             break;
                         case 'selected':
@@ -1803,17 +1822,10 @@ window.fabricInterop = {
                             color = seat.categoryId || "#f2fd58";
                             break;
                     }
-                    if (item.status == "sold" || item.status == "booked" || item.status == "Reserved") {
-                        seat.set('hoverCursor', 'default');
-                    } else {
-                        seat.set('hoverCursor', 'pointer');
-                    }
+                    const isUnavailable = ['sold', 'booked', 'reserved'].includes(status);
+                    seat.set('hoverCursor', isUnavailable ? 'default' : 'pointer');
                     if (seat.circle) {
-                        if (item.status == "sold" || item.status == "booked") {
-                            seat.circle.set('hoverCursor', 'default');
-                        } else {
-                            seat.circle.set('hoverCursor', 'pointer');
-                        }
+                        seat.circle.set('hoverCursor', isUnavailable ? 'default' : 'pointer');
                     }
                     seat.circle.set('fill', color);
                     seat.circle.set('stroke', color);
@@ -1847,34 +1859,6 @@ window.fabricInterop = {
             sel.cornerStrokeColor = "#ffffff";
             canvas.setActiveObject(sel);
             canvas.renderAll();
-        });
-        canvas.on("mouse:down", (opt) => {
-            if (this.mode !== "select") return;
-            const target = opt.target;
-            if (target && target.type === "group" && target.rowId) {
-                const rowId = target.rowId;
-                const rowSeats = canvas.getObjects().filter(o => o.type === "group" && o.rowId === rowId);
-                const labels = new Set();
-                const allToSelect = [];
-                rowSeats.forEach(seat => {
-                    allToSelect.push(seat);
-                    if (seat.rowLabelObject && !labels.has(seat.rowLabelObject)) {
-                        labels.add(seat.rowLabelObject);
-                        allToSelect.push(seat.rowLabelObject);
-                    }
-                });
-                canvas.discardActiveObject();
-                const sel = new fabric.ActiveSelection(allToSelect, { canvas });
-                sel.set({
-                    borderColor: "rgb(7, 132, 250)",
-                    cornerColor: "rgb(7, 132, 250)",
-                    backgroundColor: "rgba(7, 132, 250, 0.3)"
-                });
-                canvas.setActiveObject(sel);
-                canvas.renderAll();
-                opt.e.preventDefault();
-                opt.e.stopPropagation();
-            }
         });
         this.showValidation(canvas);
     },
@@ -2877,37 +2861,43 @@ window.fabricInterop = {
         canvas.renderAll();
     },
 
-    saveLayout(canvasId) {
-        debugger;
-        safeExecute(() => {
-            const canvas = this.canvases[canvasId];
-            if (!canvas) return;
-            const invalid = this.validateLabels(canvas);
-            const isCategorized = this.isCategorized(canvas);
-            if (invalid.length > 0) {
-                showNotification("Please label all objects before saving.", "info");
-                this.highlightInvalidObjects(invalid, canvas);
-                return;
-            }
-            if (isCategorized.length > 0) {
-                showNotification("Please categorize all objects before saving.", "info");
-                this.highlightInvalidObjects(isCategorized, canvas);
-                return;
-            }
-            const json = canvas.toJSON([
-                'seatLabel', 'seatId', 'categoryId', 'categoryName', 'seatType', 'holdToken',
-                'rowLabel', 'rowId', 'isRowLabel', 'seatStatus',
-                'objectType', 'createdBy', 'rectangleId', 'rectangleLabel', 'rectangleIcon',
-                'categoryId', 'categoryName', 'capacity', 'generalLabel', 'seatLabelFormat', 'customLabelStart',
-                'rowLabelFormat', 'rowLabelCustomStart', 'curveType', 'curveIntensity', 'curveRadius'
-            ]);
-            debugger;
-            const jsonStr = JSON.stringify(json);
-            if (json.objects.length > 0) {
-                DotNet.invokeMethodAsync("TTWSeating", "SaveSeatingLayout", jsonStr, "New", "");
-                showNotification("Saved Successfully", "success");
-            }
-        }, 'Failed to save layout');
+    async saveLayout(canvasId) {
+        const canvas = this.canvases[canvasId];
+        if (!canvas) {
+            showNotification("No chart loaded", "error");
+            return;
+        }
+        const invalid = this.validateLabels(canvas);
+        const isCategorized = this.isCategorized(canvas);
+        if (invalid.length > 0) {
+            showNotification("Please label all objects before saving.", "info");
+            this.highlightInvalidObjects(invalid, canvas);
+            return;
+        }
+        if (isCategorized.length > 0) {
+            showNotification("Please categorize all objects before saving.", "info");
+            this.highlightInvalidObjects(isCategorized, canvas);
+            return;
+        }
+        const json = canvas.toJSON([
+            'seatLabel', 'seatId', 'categoryId', 'categoryName', 'seatType', 'holdToken',
+            'rowLabel', 'rowId', 'isRowLabel', 'seatStatus',
+            'objectType', 'createdBy', 'rectangleId', 'rectangleLabel', 'rectangleIcon',
+            'categoryId', 'categoryName', 'capacity', 'generalLabel', 'seatLabelFormat', 'customLabelStart',
+            'rowLabelFormat', 'rowLabelCustomStart', 'curveType', 'curveIntensity', 'curveRadius'
+        ]);
+        if (!json.objects.length) {
+            showNotification("Chart is empty", "error");
+            return;
+        }
+        try {
+            const result = await DotNet.invokeMethodAsync("TTWSeating", "SaveSeatingLayout", JSON.stringify(json), "New", "");
+            if (result === false) throw new Error("The save operation was rejected.");
+            showNotification("Saved Successfully", "success");
+        } catch (error) {
+            console.error("Failed to save layout", error);
+            showNotification("Failed to save layout", "error");
+        }
     },
 
     //loadLayout(canvasId, jsonString) {
@@ -3122,6 +3112,8 @@ window.fabricInterop = {
         }
 
         this.linkRowLabelsToSeats(canvas);
+        // Render chart objects directly at the final viewport scale instead of scaling cached bitmaps.
+        canvas.getObjects().forEach(obj => obj.set('objectCaching', false));
         canvas.renderAll();
         this.fitAndCenterChart(canvas);
         canvas.calcOffset();
@@ -4179,15 +4171,9 @@ window.fabricInterop = {
         const isRectangleSelected = this.isRectangleSelected(activeObject);
         const isGeneralSelected = this.isGeneralSelected(activeObject);
         const isSeatSelected = this.isSeatSelected(activeObject);
-        if (isRectangleSelected) {
-            this.toggleRectangleDropdown(isRectangleSelected);
-        }
-        if (isSeatSelected) {
-            this.toggleSeatDropdown(isSeatSelected);
-        }
-        if (isGeneralSelected) {
-            this.toggleGeneralProps(isGeneralSelected);
-        }
+        this.toggleRectangleDropdown(isRectangleSelected);
+        this.toggleSeatDropdown(isSeatSelected);
+        this.toggleGeneralProps(isGeneralSelected);
     },
 
     handleSelectionCleared(canvasId) {
@@ -4215,11 +4201,11 @@ window.fabricInterop = {
                 var ddlrow = document.getElementById("ddlrow");
                 var txtrowlbl = document.getElementById("txtrowlbl");
                 if (rowCount > 1) {
-                    txtrowlbl.style.display = "none";
-                    ddlrow.style.display = "block";
+                    if (txtrowlbl) txtrowlbl.style.display = "none";
+                    if (ddlrow) ddlrow.style.display = "block";
                 } else {
-                    txtrowlbl.style.display = "block";
-                    ddlrow.style.display = "none";
+                    if (txtrowlbl) txtrowlbl.style.display = "block";
+                    if (ddlrow) ddlrow.style.display = "none";
                 }
             }
             return hasSeat;
@@ -4238,7 +4224,10 @@ window.fabricInterop = {
 
     isGeneralSelected(activeObject) {
         if (!activeObject) return false;
-        if (activeObject.type === "rect" && activeObject.objectType === "genrectangle") return true;
+        if (activeObject.objectType === "genrectangle") return true;
+        if (activeObject.type === "activeSelection") {
+            return activeObject.getObjects().some(obj => obj.objectType === "genrectangle");
+        }
         return false;
     },
 
@@ -5318,16 +5307,15 @@ window.fabricInterop = {
     //    this._resizeHandler = handleResize;
     //},
 
-    async showGASelectionPopup(canvasId, rectangle, mouseEvent, chartId) {
+    showGASelectionPopup(canvasId, rectangle, mouseEvent, chartId) {
         const canvas = this.canvases[canvasId];
         const rectangleId = rectangle.rectangleId || rectangle.get("rectangleId");
         const category = rectangle.categoryName || rectangle.get("categoryName") || "General";
         const label = rectangle.generalLabel || rectangle.get("generalLabel") || "General Area";
-        const availableCount = await getAvailableCount(chartId, category, label);
         const chartCapacity = Number(rectangle.capacity || rectangle.get("capacity") || 0);
-        const capacity = availableCount === null ? chartCapacity : availableCount;
+        let capacity = chartCapacity;
+        let maxAvailable = chartCapacity > 0 ? chartCapacity : Number.MAX_SAFE_INTEGER;
         const currentCount = rectangle.currentCount || rectangle.get("currentCount") || 0;
-        const maxAvailable = Math.max(0, chartCapacity > 0 ? Math.min(Number(capacity) || 0, chartCapacity) : Number(capacity) || 0);
 
         if (!canvas.selectedGAAreas) canvas.selectedGAAreas = [];
         const existingIndex = canvas.selectedGAAreas.findIndex(area => area.id === rectangleId);
@@ -5341,6 +5329,7 @@ window.fabricInterop = {
         // Create the popup container
         const popup = document.createElement("div");
         popup.id = "seatAdjustmentPopup";
+        popup.setAttribute('role', 'presentation');
         popup.style.cssText = `
         display: none;
         position: fixed;
@@ -5349,8 +5338,10 @@ window.fabricInterop = {
         top: 0;
         width: 100%;
         height: 100%;
-        background-color: rgba(0,0,0,0.5);
-        animation: fadeIn 0.3s ease;
+        background: rgba(15, 23, 42, 0.58);
+        backdrop-filter: blur(3px);
+        -webkit-backdrop-filter: blur(3px);
+        animation: fadeIn 0.2s ease;
         align-items: center;
         justify-content: center;
         padding: 20px;
@@ -5360,15 +5351,19 @@ window.fabricInterop = {
         // Create modal content
         const modalContent = document.createElement("div");
         modalContent.className = "modal-content";
+        modalContent.setAttribute('role', 'dialog');
+        modalContent.setAttribute('aria-modal', 'true');
+        modalContent.setAttribute('aria-labelledby', 'gaPopupTitle');
+        modalContent.setAttribute('aria-describedby', 'gaPopupAvailability');
         modalContent.style.cssText = `
-        background: white;
-        width: 100%;
-        max-width: 400px;
+        background: #ffffff;
+        width: min(100%, 400px);
         margin: 0 auto;
-        border-radius: 16px;
-        padding: 24px;
-        box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-        animation: modalPopIn 0.3s ease;
+        border: 1px solid rgba(148, 163, 184, 0.28);
+        border-radius: 20px;
+        padding: 26px;
+        box-shadow: 0 24px 70px rgba(15, 23, 42, 0.24);
+        animation: modalPopIn 0.22s ease;
         position: relative;
         max-height: 90vh;
         overflow-y: auto;
@@ -5392,6 +5387,8 @@ window.fabricInterop = {
         -webkit-tap-highlight-color: transparent;
         line-height: 1;
     `;
+        closeBtn.type = 'button';
+        closeBtn.setAttribute('aria-label', 'Close ticket selection');
         closeBtn.textContent = "✕";
         closeBtn.onclick = (e) => {
             e.stopPropagation();
@@ -5413,16 +5410,24 @@ window.fabricInterop = {
         font-weight: 600;
         color: #111827;
     `;
+        title.id = 'gaPopupTitle';
         title.textContent = label || 'Select Tickets';
 
+        const categoryLabel = document.createElement('p');
+        categoryLabel.style.cssText = 'margin:0 0 8px;font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#64748b';
+        categoryLabel.textContent = category;
+
         const subtitle = document.createElement("p");
+        subtitle.id = 'gaPopupAvailability';
+        subtitle.setAttribute('role', 'status');
         subtitle.style.cssText = `
         margin: 0;
         font-size: 13px;
-        color: #6b7280;
+        color: #64748b;
     `;
-        subtitle.textContent = `Available: ${maxAvailable} tickets`;
+        subtitle.textContent = chartId ? 'Checking live availability…' : `Available: ${chartCapacity} tickets`;
 
+        titleSection.appendChild(categoryLabel);
         titleSection.appendChild(title);
         titleSection.appendChild(subtitle);
 
@@ -5450,6 +5455,8 @@ window.fabricInterop = {
         // Decrease button
         const decreaseBtn = document.createElement("button");
         decreaseBtn.id = "decreaseSeats";
+        decreaseBtn.type = 'button';
+        decreaseBtn.setAttribute('aria-label', 'Decrease ticket quantity');
         decreaseBtn.style.cssText = `
         width: 48px;
         height: 48px;
@@ -5485,6 +5492,8 @@ window.fabricInterop = {
         // Increase button
         const increaseBtn = document.createElement("button");
         increaseBtn.id = "increaseSeats";
+        increaseBtn.type = 'button';
+        increaseBtn.setAttribute('aria-label', 'Increase ticket quantity');
         increaseBtn.style.cssText = `
         width: 48px;
         height: 48px;
@@ -5504,8 +5513,15 @@ window.fabricInterop = {
     `;
         increaseBtn.textContent = "+";
 
+        const countDisplay = document.createElement('div');
+        countDisplay.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:2px;min-width:64px';
+        const countLabel = document.createElement('span');
+        countLabel.textContent = 'TICKETS';
+        countLabel.style.cssText = 'font-size:10px;font-weight:700;letter-spacing:.12em;color:#94a3b8';
+        countDisplay.appendChild(countLabel);
+        countDisplay.appendChild(seatCount);
         counterSection.appendChild(decreaseBtn);
-        counterSection.appendChild(seatCount);
+        counterSection.appendChild(countDisplay);
         counterSection.appendChild(increaseBtn);
 
         // Button container
@@ -5538,6 +5554,8 @@ window.fabricInterop = {
         // Confirm button
         const confirmBtn = document.createElement("button");
         confirmBtn.id = "confirmBtn";
+        confirmBtn.type = 'button';
+        confirmBtn.disabled = Boolean(chartId);
         confirmBtn.style.cssText = `
         flex: 2;
         padding: 12px 20px;
@@ -5552,7 +5570,7 @@ window.fabricInterop = {
         touch-action: manipulation;
         -webkit-tap-highlight-color: transparent;
     `;
-        confirmBtn.textContent = "Confirm";
+        confirmBtn.textContent = chartId ? 'Checking availability…' : 'Confirm';
 
         buttonContainer.appendChild(cancelBtn);
         buttonContainer.appendChild(confirmBtn);
@@ -5666,9 +5684,12 @@ window.fabricInterop = {
             }
         }
     `;
+    if (!document.getElementById('ga-popup-styles')) {
+        style.id = 'ga-popup-styles';
         document.head.appendChild(style);
+    }
 
-        // Add class names for styling
+    // Add class names for styling
         modalContent.querySelector('#decreaseSeats').className = 'decrease-btn';
         modalContent.querySelector('#increaseSeats').className = 'increase-btn';
         modalContent.querySelector('#cancelBtn').className = 'cancel-btn';
@@ -5818,8 +5839,25 @@ window.fabricInterop = {
         document.addEventListener('keydown', handleEscape);
         this._escapeHandler = handleEscape;
 
-        // Show popup
+        // Show the dialog immediately; availability loading must not block opening it.
         popup.style.display = "flex";
+        closeBtn.focus();
+        updateButtonStates();
+        if (chartId) {
+            getAvailableCount(chartId, category, label).then(availableCount => {
+                if (document.getElementById('seatAdjustmentPopup') !== popup) return;
+                capacity = availableCount === null ? chartCapacity : availableCount;
+                maxAvailable = Math.max(0, chartCapacity > 0 ? Math.min(Number(capacity) || 0, chartCapacity) : Number(capacity) || 0);
+                ticketCount = Math.min(ticketCount, maxAvailable);
+                seatCount.textContent = ticketCount;
+                subtitle.textContent = availableCount === null
+                    ? `Live availability unavailable; chart capacity: ${maxAvailable} tickets`
+                    : `Available: ${maxAvailable} tickets`;
+                confirmBtn.disabled = false;
+                confirmBtn.textContent = 'Confirm';
+                updateButtonStates();
+            });
+        }
 
         // Handle window resize - ensure popup stays centered
         const handleResize = () => {
@@ -6793,7 +6831,6 @@ window.fabricInterop = {
         //const flatSeats = selectedRows.flat();
         const flatSeats = selectedRows.flatMap(row => row.seats);
         const seatWithCurve = flatSeats.find(s => s.curveType && s.curveType !== 'none');
-        debugger;
         if (seatWithCurve) {
             defaultCurveType = seatWithCurve.curveType;
             defaultIntensity = seatWithCurve.curveIntensity != null
@@ -7992,8 +8029,7 @@ window.fabricInterop = {
         canvas.on("mouse:down", (opt) => {
             const target = opt.target;
             const objectType = target && (target.objectType || (target.get && target.get('objectType')));
-            const targetIsSeat = target && target.type === 'group' && (target.seatId || target.get('seatId'));
-            const area = objectType === 'genrectangle' ? target : targetIsSeat ? null : findGeneralAreaAtPointer(canvas, opt.e);
+            const area = objectType === 'genrectangle' ? target : findGeneralAreaAtPointer(canvas, opt.e, target, opt.subTargets);
             if (area) this.handleGenRectangleSelection(canvasId, area, opt.e, ChartId);
         });
     },
@@ -8232,7 +8268,6 @@ window.fabricInterop = {
         // Note: You may also want to show/hide custom seat div
     },
     populateRectangleProperties: function (canvasId) {
-        debugger;
         const canvas = this.canvases[canvasId];
         if (!canvas) return;
         const active = canvas.getActiveObject();
@@ -8926,7 +8961,6 @@ window.fabricInterop = {
 //}
 
 function applyLabelVisibility(canvas, showRow, showSeat) {
-    debugger;
     canvas.forEachObject(function (obj) {
         // Handle standalone text objects (row labels)
         if (obj.type === 'text' || obj.type === 'i-text' || obj.type === 'textbox') {
@@ -9039,7 +9073,6 @@ function sendSelectedSeatsToParent(selectedSeats) {
 }
 
 window.setGlobalPriceList = function (priceList) {
-    debugger;
     console.log("Price list received in Blazor:", priceList);
     window.globalPriceList = priceList;
 };
@@ -9696,17 +9729,6 @@ function addModalStyles() {
     }
 }
 
-function safeExecute(fn, errorMessage) {
-    try {
-        return fn();
-    } catch (error) {
-        console.error(errorMessage, error);
-        showNotification(errorMessage, 'error');
-        if (window.errorTracking) window.errorTracking.captureException(error);
-        return null;
-    }
-}
-
 function getSeatX(seat) {
     return seat.getBoundingRect(true, true).left;
 }
@@ -9728,21 +9750,19 @@ function initCustomizeButton() {
     }
 }
 
-function saveCurrentChartWithNewId(newChartId) {
+async function saveCurrentChartWithNewId(newChartId) {
     const canvas = window.fabricInterop.canvases["seatCanvas"];
     if (!canvas) {
         showNotification("No chart loaded", "error");
         return;
     }
 
-    // Get all objects
     const objects = canvas.getObjects();
     if (objects.length === 0) {
         showNotification("Chart is empty", "error");
         return;
     }
 
-    // Serialize the current state
     const json = canvas.toJSON([
         'seatLabel', 'seatId', 'categoryId', 'categoryName', 'seatType', 'holdToken',
         'rowLabel', 'rowId', 'isRowLabel', 'seatStatus',
@@ -9752,25 +9772,14 @@ function saveCurrentChartWithNewId(newChartId) {
         'rowLabelFormat', 'rowLabelCustomStart'
     ]);
 
-
-    const jsonStr = JSON.stringify(json);
-
-    // Save with new chart ID
-    DotNet.invokeMethodAsync("TTWSeating", "SaveSeatingLayout", jsonStr, "Copy", newChartId);
-    showNotification(`Chart Copied"`, "success");
-
-    //.then(response => {
-    //    debugger;
-    //    if (response.success) {
-    //        showNotification(`Chart Copied"`, "success");
-    //    } else {
-    //        showNotification(response.message || "Failed to save", "error");
-    //    }
-    //})
-    //.catch(err => {
-    //    showNotification("Error saving as new chart", "error");
-    //    console.error(err);
-    //});
+    try {
+        const result = await DotNet.invokeMethodAsync("TTWSeating", "SaveSeatingLayout", JSON.stringify(json), "Copy", newChartId);
+        if (result === false) throw new Error("The copy operation was rejected.");
+        showNotification("Chart copied successfully", "success");
+    } catch (error) {
+        console.error("Failed to copy chart", error);
+        showNotification("Failed to copy chart", "error");
+    }
 }
 function saveChartAsNew() {
     // Show a prompt or dialog to get the new chart key
