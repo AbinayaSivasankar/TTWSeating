@@ -156,6 +156,9 @@ window.fabricInterop = {
         this.resetChartState(canvasId);
         const canvasElement = document.getElementById(canvasId);
         const parent = canvasElement.parentElement;
+        // Sharp rendering: draw shapes at the real zoom and use the current screen density.
+        fabric.Object.prototype.objectCaching = false;
+        fabric.devicePixelRatio = window.devicePixelRatio || 1;
         canvas = new fabric.Canvas(canvasId, {
             selection: true,
             enableRetinaScaling: true,
@@ -5684,12 +5687,12 @@ window.fabricInterop = {
             }
         }
     `;
-    if (!document.getElementById('ga-popup-styles')) {
-        style.id = 'ga-popup-styles';
-        document.head.appendChild(style);
-    }
+        if (!document.getElementById('ga-popup-styles')) {
+            style.id = 'ga-popup-styles';
+            document.head.appendChild(style);
+        }
 
-    // Add class names for styling
+        // Add class names for styling
         modalContent.querySelector('#decreaseSeats').className = 'decrease-btn';
         modalContent.querySelector('#increaseSeats').className = 'increase-btn';
         modalContent.querySelector('#cancelBtn').className = 'cancel-btn';
@@ -9078,29 +9081,39 @@ window.setGlobalPriceList = function (priceList) {
 };
 
 function showSeatTooltip(x, y, seat, price) {
-    if (!document.getElementById('chartPreviewTooltipStyle')) {
+    const STYLE_ID = 'chartPreviewTooltipStyle';
+    const oldStyle = document.getElementById(STYLE_ID);
+    if (oldStyle && oldStyle.dataset.v !== '3') oldStyle.remove();
+    if (!document.getElementById(STYLE_ID)) {
         const style = document.createElement('style');
-        style.id = 'chartPreviewTooltipStyle';
+        style.id = STYLE_ID;
+        style.dataset.v = '3';
         style.textContent = `
-            .chart-preview-tip{position:fixed;z-index:99999;display:none;pointer-events:none;box-sizing:border-box;width:min(300px,calc(100vw - 24px));min-height:120px;max-height:calc(100vh - 16px);overflow:auto;border:1px solid #e8ebf3;border-radius:14px;background:#fff;color:#202438;font:13px/1.45 system-ui,sans-serif;box-shadow:0 12px 32px #1e254033}
-            .cpt-identity{display:grid;grid-template-columns:1fr 1fr}
-            .cpt-identity-cell{display:flex;min-width:0;min-height:60px;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:8px}
-            .cpt-identity-cell+.cpt-identity-cell{border-left:1px solid #e8ebf3}
-            .cpt-label{color:#929292;font-size:10px;font-weight:700;letter-spacing:.04em;line-height:1.2;text-transform:uppercase}
-            .cpt-value{max-width:100%;overflow:hidden;color:#242424;font-size:24px;font-weight:700;line-height:1.15;text-overflow:ellipsis;white-space:nowrap}
-            .cpt-details{display:grid;grid-template-columns:1fr auto;gap:5px 12px;padding:8px 10px 10px;border-top:1px solid #edf0f5}
-            .cpt-detail-label{color:#7b8294}
-            .cpt-detail-value{color:#30364a;font-weight:650;text-align:right}
-            .cpt-status{padding:2px 8px;border-radius:999px;background:#f1f3f8;color:#50576a;font-size:11px;font-weight:700;text-align:center;text-transform:capitalize}
-            .cpt-status.available{background:#e8f7ef;color:#18794e}
-            .cpt-status.unavailable{background:#fff0ef;color:#b42318}
-            .cpt-accessibility{padding:9px 10px 10px;border-top:1px solid #edf0f5}
-            .cpt-accessibility-heading{display:flex;align-items:center;gap:6px;margin:0 0 6px;color:#68718a;font-size:10px;font-weight:700;letter-spacing:.065em;text-transform:uppercase}
-            .cpt-accessibility-mark{width:6px;height:6px;border-radius:50%;background:#6558d9}
-            .cpt-accessibility-list{display:flex;flex-wrap:wrap;gap:6px}
-            .cpt-accessibility-chip{display:inline-flex;max-width:100%;align-items:center;gap:8px;padding:5px 9px;border:0;border-radius:7px;background:#f5f6fb;color:#35405a;font-size:11px;font-weight:600;line-height:1.3}
-            .cpt-accessibility-chip svg{box-sizing:border-box;width:22px;height:22px;flex:none;padding:4px;border-radius:6px;background:#fff;color:#5145cd}
-            .cpt-accessibility-chip span{overflow-wrap:anywhere}
+            .chart-preview-tip{position:fixed;z-index:99999;display:none;pointer-events:none;box-sizing:border-box;width:min(264px,calc(100vw - 24px));max-height:calc(100vh - 16px);overflow:hidden;border:1px solid #e6e9f2;border-radius:14px;background:#fff;color:#1b2036;font:13px/1.4 "Segoe UI",system-ui,-apple-system,sans-serif;box-shadow:0 14px 36px rgba(20,26,55,.18),0 2px 6px rgba(20,26,55,.08);animation:cptIn .12s ease-out}
+            @keyframes cptIn{from{opacity:0;transform:translateY(4px) scale(.98)}to{opacity:1;transform:none}}
+            @media (prefers-reduced-motion:reduce){.chart-preview-tip{animation:none}}
+            .cpt-bar{height:4px}
+            .cpt-head{display:flex;align-items:center;gap:8px;padding:10px 12px 0}
+            .cpt-dot{width:10px;height:10px;flex:none;border-radius:50%;box-shadow:0 0 0 2px #fff,0 0 0 3px rgba(20,26,55,.1)}
+            .cpt-cat{flex:1;min-width:0;overflow:hidden;color:#3a4160;font-size:12.5px;font-weight:600;text-overflow:ellipsis;white-space:nowrap}
+            .cpt-status{flex:none;padding:2px 9px;border-radius:999px;background:#f1f3f8;color:#50576a;font-size:11px;font-weight:700;text-transform:capitalize}
+            .cpt-status.available{background:#e6f6ee;color:#15753f}
+            .cpt-status.selected{background:#e9e7ff;color:#4338ca}
+            .cpt-status.held{background:#fff4df;color:#9a5b00}
+            .cpt-status.unavailable{background:#fdecea;color:#b42318}
+            .cpt-main{display:flex;gap:6px;padding:10px 12px 12px}
+            .cpt-cell{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:8px 6px;border-radius:10px;background:#f6f7fb}
+            .cpt-cell.price{background:#eef0ff}
+            .cpt-label{color:#8a91a8;font-size:10px;font-weight:700;letter-spacing:.06em;line-height:1.2;text-transform:uppercase}
+            .cpt-value{max-width:100%;overflow:hidden;color:#1b2036;font-size:22px;font-weight:700;line-height:1.15;text-overflow:ellipsis;white-space:nowrap}
+            .cpt-cell.price .cpt-value{color:#4338ca;font-size:17px}
+            .cpt-access{padding:10px 12px 12px;border-top:1px solid #edf0f5}
+            .cpt-access-title{display:flex;align-items:center;gap:6px;margin:0 0 7px;color:#68718a;font-size:10px;font-weight:700;letter-spacing:.065em;text-transform:uppercase}
+            .cpt-access-mark{width:6px;height:6px;border-radius:50%;background:#6558d9}
+            .cpt-access-list{display:flex;flex-wrap:wrap;gap:6px}
+            .cpt-chip{display:inline-flex;max-width:100%;align-items:center;gap:7px;padding:4px 10px 4px 5px;border-radius:999px;background:#f5f6fb;color:#35405a;font-size:11px;font-weight:600;line-height:1.3}
+            .cpt-chip svg{box-sizing:border-box;width:22px;height:22px;flex:none;padding:4px;border-radius:50%;background:#fff;color:#5145cd}
+            .cpt-chip span{overflow-wrap:anywhere}
         `;
         document.head.appendChild(style);
     }
@@ -9116,48 +9129,41 @@ function showSeatTooltip(x, y, seat, price) {
     tip.className = 'chart-preview-tip';
     tip.setAttribute('role', 'tooltip');
 
-    const addIdentity = (container, label, value, color) => {
-        const cell = document.createElement('div');
-        cell.className = 'cpt-identity-cell';
-        const key = document.createElement('span');
-        key.className = 'cpt-label';
-        key.textContent = label;
-        const val = document.createElement('span');
-        val.className = 'cpt-value';
-        val.style.color = color || '#242424';
-        val.textContent = value || '—';
-        cell.append(key, val);
-        container.appendChild(cell);
-    };
-    const identity = document.createElement('div');
-    identity.className = 'cpt-identity';
-    addIdentity(identity, seat.chartSeatType === 'table' ? 'Table' : 'Row', seat.rowLabel, seat.categoryId);
-    addIdentity(identity, 'Seat', seat.seatLabel, seat.categoryId);
-    tip.appendChild(identity);
+    const get = key => seat[key] != null ? seat[key] : (seat.get ? seat.get(key) : undefined);
+    const make = (tag, cls, text) => { const el = document.createElement(tag); if (cls) el.className = cls; if (text != null) el.textContent = text; return el; };
+    const color = /^#[0-9a-f]{3,8}$|^rgb|^hsl/i.test(get('categoryId') || '') ? get('categoryId') : '#6558d9';
 
-    const details = document.createElement('div');
-    details.className = 'cpt-details';
-    const addDetail = (label, value, status) => {
-        if (!value) return;
-        const key = document.createElement('span');
-        key.className = 'cpt-detail-label';
-        key.textContent = label;
-        const val = document.createElement('span');
-        val.className = status ? 'cpt-status' : 'cpt-detail-value';
-        if (status) {
-            const normalized = value.toLowerCase();
-            if (normalized === 'available') val.classList.add('available');
-            else if (/booked|sold|reserved|unavailable|occupied/.test(normalized)) val.classList.add('unavailable');
-        }
-        val.textContent = value;
-        details.append(key, val);
-    };
-    addDetail('Category', seat.categoryName || seat.get('categoryName'));
-    addDetail('Status', seat.seatStatus || seat.get('seatStatus') || 'Available', true);
-    if (price != null) addDetail('Price', String(price) === 'Unknown' ? 'Unknown' : '$' + price);
-    if (details.childNodes.length) tip.appendChild(details);
+    // thin colour bar + category name + status
+    const bar = make('div', 'cpt-bar'); bar.style.background = color;
+    tip.appendChild(bar);
+    const head = make('div', 'cpt-head');
+    const dot = make('span', 'cpt-dot'); dot.style.background = color;
+    head.append(dot, make('span', 'cpt-cat', get('categoryName') || 'Seat'));
+    const statusText = String(get('seatStatus') || 'Available');
+    const statusKey = statusText.toLowerCase();
+    const status = make('span', 'cpt-status', statusText);
+    if (statusKey === 'available') status.classList.add('available');
+    else if (/selected/.test(statusKey)) status.classList.add('selected');
+    else if (/hold|held|reserved|pending/.test(statusKey)) status.classList.add('held');
+    else if (/booked|sold|unavailable|occupied/.test(statusKey)) status.classList.add('unavailable');
+    head.appendChild(status);
+    tip.appendChild(head);
 
-    const props = seat.seatProps || (seat.get && seat.get('seatProps')) || {};
+    // row / seat / price
+    const main = make('div', 'cpt-main');
+    const cell = (label, value, extra) => { const c = make('div', 'cpt-cell' + (extra ? ' ' + extra : '')); c.append(make('span', 'cpt-label', label), make('span', 'cpt-value', value || '—')); main.appendChild(c); };
+    cell(get('chartSeatType') === 'table' ? 'Table' : 'Row', get('rowLabel'));
+    cell('Seat', get('seatLabel'));
+    const priceText = (() => {
+        if (price == null || String(price).trim() === '' || String(price) === 'Unknown') return '';
+        const parts = String(price).split('-').map(p => p.trim()).filter(Boolean);
+        return parts.length === 2 && parts[0] !== parts[1] ? '$' + parts[0] + ' – $' + parts[1] : '$' + parts[0];
+    })();
+    if (priceText) cell('Price', priceText, 'price');
+    tip.appendChild(main);
+
+    // accessibility
+    const props = get('seatProps') || {};
     const names = { wheelchair: 'Wheelchair space', companion: 'Companion seat', accessible: 'Accessible seat', hear: 'Hearing impaired', cart: 'CART services', sign: 'Sign language interpretation', res: 'Restricted view', ver: 'Not suitable for vertigo sufferers', leg: 'Limited legroom', arm: 'Lift-up armrests' };
     const icons = {
         wheelchair: '<circle cx="10" cy="4" r="2" fill="currentColor"/><path d="M10 8v6h5l2 5M7 11a5 5 0 105 8" fill="none" stroke="currentColor" stroke-width="2"/>',
@@ -9174,43 +9180,50 @@ function showSeatTooltip(x, y, seat, price) {
     const flags = ['hear', 'res', 'ver', 'leg', 'arm'];
     const notes = [...new Set([props.acc, ...flags.filter(key => props[key]), ...(props.hear && props.cart ? ['cart'] : []), ...(props.hear && props.sign ? ['sign'] : [])].filter(key => key && names[key]))];
     if (notes.length) {
-        const section = document.createElement('section');
-        section.className = 'cpt-accessibility';
+        const section = make('section', 'cpt-access');
         section.setAttribute('aria-label', 'Accessibility features');
-        const heading = document.createElement('div');
-        heading.className = 'cpt-accessibility-heading';
-        const mark = document.createElement('span');
-        mark.className = 'cpt-accessibility-mark';
-        mark.setAttribute('aria-hidden', 'true');
-        const headingText = document.createElement('span');
-        headingText.textContent = 'Accessibility';
-        heading.append(mark, headingText);
-        section.appendChild(heading);
-        const list = document.createElement('div');
-        list.className = 'cpt-accessibility-list';
+        const title = make('div', 'cpt-access-title');
+        const mark = make('span', 'cpt-access-mark'); mark.setAttribute('aria-hidden', 'true');
+        title.append(mark, make('span', null, 'Accessibility'));
+        const list = make('div', 'cpt-access-list');
         notes.forEach(key => {
-            const chip = document.createElement('span');
-            chip.className = 'cpt-accessibility-chip';
+            const chip = make('span', 'cpt-chip');
             const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-            icon.setAttribute('viewBox', '0 0 24 24');
-            icon.setAttribute('aria-hidden', 'true');
+            icon.setAttribute('viewBox', '0 0 24 24'); icon.setAttribute('aria-hidden', 'true');
             icon.innerHTML = icons[key] || icons.accessible;
-            const label = document.createElement('span');
-            label.textContent = names[key];
-            chip.append(icon, label);
+            chip.append(icon, make('span', null, names[key]));
             list.appendChild(chip);
         });
-        section.append(heading, list);
+        section.append(title, list);
         tip.appendChild(section);
     }
 
     tip.style.display = 'block';
-    const margin = 8, gap = 14, bounds = tip.getBoundingClientRect();
+    placeSeatTooltip(tip, x, y);
+}
+
+// next to the pointer, flipping and clamping so it never leaves the screen
+function placeSeatTooltip(tip, x, y) {
+    const margin = 8, gap = 16, bounds = tip.getBoundingClientRect();
     let left = x + gap, top = y + gap;
     if (left + bounds.width > window.innerWidth - margin) left = x - bounds.width - gap;
     if (top + bounds.height > window.innerHeight - margin) top = y - bounds.height - gap;
     tip.style.left = Math.max(margin, Math.min(left, window.innerWidth - bounds.width - margin)) + 'px';
     tip.style.top = Math.max(margin, Math.min(top, window.innerHeight - bounds.height - margin)) + 'px';
+}
+
+function moveSeatTooltip(x, y) {
+    const tip = document.getElementById('seatTooltip');
+    if (tip && tip.style.display === 'block') placeSeatTooltip(tip, x, y);
+}
+
+// Price text for a category from the global price list (empty when there is none).
+function seatTooltipPrice(categoryName) {
+    const priceObj = (window.globalPriceList || []).find(item => item.category === categoryName);
+    if (!priceObj) return null;
+    if (priceObj.ticketTypes == null) return priceObj.price;
+    const prices = priceObj.ticketTypes.map(item => Number.parseFloat(item.price)).filter(Number.isFinite);
+    return prices.length ? Math.min(...prices) + '-' + Math.max(...prices) : null;
 }
 
 function showTooltip(x, y, htmlContent) {
@@ -9902,7 +9915,7 @@ async function getAvailableCount(chartId, categoryName, areaLabel) {
             const c = catMap(cats, s.cat).color, cc = center(s), g = svgEl('g', { transform: `rotate(${s.rot || 0} ${cc.x} ${cc.y})` }, svg);
             if (s.type === 'row') {
                 const q = rowSeats(s); q.p.forEach((p, i) => {
-                    const sd = (s.sd && s.sd[i]) || {}, seatName = (s.label || '') + '-' + (sd.label || p.l), db = seatLookup.get(seatName), cat = catMap(cats, sd.cat || s.cat), fill = cat.color, seatLabel = sd.label || p.l; const circle = svgEl('circle', { cx: p.x, cy: p.y, r: R, fill, stroke: '#fff', 'stroke-width': 1.5, 'data-seat': seatName, tabindex: 0, 'aria-label': `Row ${s.label || ''}, seat ${seatLabel}, ${cat.name}${db?.status ? ', ' + db.status : ''}` }, g); const tip = { type: 'Row', section: s.label || s.section || '', seat: seatLabel, category: cat.name, color: cat.color, status: db?.status || '', notes: seatAccNotes(sd) }; circle.addEventListener('mouseenter', e => showTip(host, tip, e)); circle.addEventListener('mouseleave', hideTip); circle.addEventListener('focus', e => showTip(host, tip, e)); circle.addEventListener('blur', hideTip); const hasAcc = sd.acc && SI[sd.acc], fk = FLAGS.filter(k => sd[k]);
+                    const sd = (s.sd && s.sd[i]) || {}, seatName = (s.label || '') + '-' + (sd.label || p.l), db = seatLookup.get(seatName), cat = catMap(cats, sd.cat || s.cat), fill = cat.color, seatLabel = sd.label || p.l; const circle = svgEl('circle', { cx: p.x, cy: p.y, r: R, fill, stroke: '#fff', 'stroke-width': 1.5, 'data-seat': seatName, tabindex: 0, 'aria-label': `Row ${s.label || ''}, seat ${seatLabel}, ${cat.name}${db?.status ? ', ' + db.status : ''}` }, g); const tip = { type: 'Row', section: s.label || s.section || '', seat: seatLabel, category: cat.name, color: cat.color, status: db?.status || '', notes: seatAccNotes(sd), props: sd }; circle.addEventListener('mouseenter', e => showTip(host, tip, e)); circle.addEventListener('mouseleave', hideTip); circle.addEventListener('focus', e => showTip(host, tip, e)); circle.addEventListener('blur', hideTip); const hasAcc = sd.acc && SI[sd.acc], fk = FLAGS.filter(k => sd[k]);
                     if (hasAcc) svgEl('g', { style: 'color:#fff', transform: `translate(${p.x - 7} ${p.y - 7}) scale(${14 / 24})`, 'pointer-events': 'none' }, g).innerHTML = SI[sd.acc];
                     else if (showSeats) text(g, p.x, p.y + 3, sd.label || p.l, { 'text-anchor': 'middle', 'font-size': 8, 'font-weight': 600, fill: '#fff', 'pointer-events': 'none' });
                     if (fk.length) { const bx = p.x + R - 1, by = p.y - R + 1; svgEl('circle', { cx: bx, cy: by, r: 5.6, fill: '#f59e0b', stroke: '#fff', 'stroke-width': 1.2, 'pointer-events': 'none' }, g); if (fk.length === 1) svgEl('g', { style: 'color:#fff', transform: `translate(${bx - 3.6} ${by - 3.6}) scale(${7.2 / 24})`, 'pointer-events': 'none' }, g).innerHTML = SI[fk[0]]; else text(g, bx, by + 3, fk.length, { 'text-anchor': 'middle', 'font-size': 8, 'font-weight': 700, fill: '#fff', 'pointer-events': 'none' }); }
@@ -9915,133 +9928,30 @@ async function getAvailableCount(chartId, categoryName, areaLabel) {
 
             else { const isRect = s.type === 'rect', shape = s.shape || 'rect'; if (shape === 'poly' && s.pts) svgEl('polygon', { points: s.pts.map(p => `${p.x},${p.y}`).join(' '), fill: isRect ? '#e6e9f4' : c + '2a', stroke: isRect ? '#b9c1da' : c, 'stroke-width': 1.5, 'stroke-dasharray': s.type === 'general' ? '7 5' : '0' }, g); else if (shape === 'circle') svgEl('ellipse', { cx: s.x + s.w / 2, cy: s.y + s.h / 2, rx: s.w / 2, ry: s.h / 2, fill: isRect ? '#e6e9f4' : c + '2a', stroke: isRect ? '#b9c1da' : c, 'stroke-width': 1.5, 'stroke-dasharray': s.type === 'general' ? '7 5' : '0' }, g); else svgEl('rect', { x: s.x, y: s.y, width: s.w, height: s.h, rx: 10, fill: isRect ? '#e6e9f4' : c + '2a', stroke: isRect ? '#b9c1da' : c, 'stroke-width': 1.5, 'stroke-dasharray': s.type === 'general' ? '7 5' : '0' }, g); text(g, s.x + s.w / 2, s.y + s.h / 2 + 5, s.label || '', { 'text-anchor': 'middle', 'font-size': 14, 'font-weight': 600, fill: '#1e2540' }); if (s.type === 'general') text(g, s.x + s.w / 2, s.y + s.h / 2 + 23, (s.cap || 0) + ' capacity', { 'text-anchor': 'middle', 'font-size': 11, fill: '#7a85a6' }); }
         });
-        if (!document.getElementById('chartPreviewTooltipStyle')) {
-            const style = document.createElement('style');
-            style.id = 'chartPreviewTooltipStyle';
-            style.textContent = `
-                .chart-preview-tip{position:fixed;z-index:99999;display:none;pointer-events:none;box-sizing:border-box;width:min(300px,calc(100vw - 24px));min-height:120px;max-height:calc(100vh - 16px);overflow:auto;border:1px solid #e8ebf3;border-radius:14px;background:#fff;color:#202438;font:13px/1.45 system-ui,sans-serif;box-shadow:0 12px 32px #1e254033}
-                .cpt-identity{display:grid;grid-template-columns:1fr 1fr}
-                .cpt-identity-cell{display:flex;min-width:0;min-height:60px;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:8px}
-                .cpt-identity-cell+.cpt-identity-cell{border-left:1px solid #e8ebf3}
-                .cpt-label{color:#929292;font-size:10px;font-weight:700;letter-spacing:.04em;line-height:1.2;text-transform:uppercase}
-                .cpt-value{max-width:100%;overflow:hidden;color:#242424;font-size:24px;font-weight:700;line-height:1.15;text-overflow:ellipsis;white-space:nowrap}
-                .cpt-details{display:grid;grid-template-columns:1fr auto;gap:5px 12px;padding:8px 10px 10px;border-top:1px solid #edf0f5}
-                .cpt-detail-label{color:#7b8294}
-                .cpt-detail-value{color:#30364a;font-weight:650;text-align:right}
-                .cpt-status{padding:2px 8px;border-radius:999px;background:#f1f3f8;color:#50576a;font-size:11px;font-weight:700;text-align:center;text-transform:capitalize}
-                .cpt-status.available{background:#e8f7ef;color:#18794e}
-                .cpt-status.unavailable{background:#fff0ef;color:#b42318}
-                .cpt-accessibility{padding:9px 10px 10px;border-top:1px solid #edf0f5}
-                .cpt-accessibility-heading{display:flex;align-items:center;gap:6px;margin:0 0 6px;color:#68718a;font-size:10px;font-weight:700;letter-spacing:.065em;text-transform:uppercase}
-                .cpt-accessibility-mark{width:6px;height:6px;border-radius:50%;background:#6558d9}
-                .cpt-accessibility-list{display:flex;flex-wrap:wrap;gap:6px}
-                .cpt-accessibility-chip{display:inline-flex;max-width:100%;align-items:center;gap:8px;padding:5px 9px;border:0;border-radius:7px;background:#f5f6fb;color:#35405a;font-size:11px;font-weight:600;line-height:1.3}
-                .cpt-accessibility-chip svg{box-sizing:border-box;width:22px;height:22px;flex:none;padding:4px;border-radius:6px;background:#fff;color:#5145cd}
-                .cpt-accessibility-chip span{overflow-wrap:anywhere}
-            `;
-            document.head.appendChild(style);
-        }
     }
     function showTip(host, details, event) {
-        let tip = document.getElementById('chartPreviewTooltip');
-        if (!tip) {
-            tip = document.createElement('div');
-            tip.id = 'chartPreviewTooltip';
-            tip.className = 'chart-preview-tip';
-            tip.setAttribute('role', 'tooltip');
-            document.body.appendChild(tip);
-        }
-        tip.replaceChildren();
-        const identity = document.createElement('div');
-        identity.className = 'cpt-identity';
-        const addIdentity = (label, value) => {
-            const cell = document.createElement('div');
-            cell.className = 'cpt-identity-cell';
-            const key = document.createElement('span');
-            key.className = 'cpt-label';
-            key.textContent = label;
-            const val = document.createElement('span');
-            val.className = 'cpt-value';
-            val.style.color = details.color || '#242424';
-            val.textContent = value || '—';
-            cell.append(key, val);
-            identity.appendChild(cell);
-        };
-        addIdentity(details.type === 'Table' ? 'Table' : 'Row', details.section);
-        addIdentity('Seat', details.seat);
-        tip.appendChild(identity);
-
-        const grid = document.createElement('div');
-        grid.className = 'cpt-details';
-        const addDetail = (label, value, status) => {
-            if (!value) return;
-            const key = document.createElement('span');
-            key.className = 'cpt-detail-label';
-            key.textContent = label;
-            const val = document.createElement('span');
-            val.className = status ? 'cpt-status' : 'cpt-detail-value';
-            if (status) {
-                const normalized = value.toLowerCase();
-                if (normalized === 'available') val.classList.add('available');
-                else if (/booked|sold|unavailable|occupied/.test(normalized)) val.classList.add('unavailable');
-            }
-            val.textContent = value;
-            grid.append(key, val);
-        };
-        addDetail('Category', details.category);
-        addDetail('Status', details.status, true);
-        if (grid.childNodes.length) tip.append(grid);
-
-        const notes = (details.notes || []).filter(note => note && note.label);
-        if (notes.length) {
-            const section = document.createElement('section');
-            section.className = 'cpt-accessibility';
-            section.setAttribute('aria-label', 'Accessibility features');
-            const heading = document.createElement('div');
-            heading.className = 'cpt-accessibility-heading';
-            const mark = document.createElement('span');
-            mark.className = 'cpt-accessibility-mark';
-            mark.setAttribute('aria-hidden', 'true');
-            const headingText = document.createElement('span');
-            headingText.textContent = 'Accessibility';
-            heading.append(mark, headingText);
-            section.appendChild(heading);
-
-            const list = document.createElement('div');
-            list.className = 'cpt-accessibility-list';
-            notes.forEach(note => {
-                const chip = document.createElement('span');
-                chip.className = 'cpt-accessibility-chip';
-                const icon = document.createElementNS(NS, 'svg');
-                icon.setAttribute('viewBox', '0 0 24 24');
-                icon.setAttribute('aria-hidden', 'true');
-                icon.innerHTML = SI[note.key] || SI.accessible;
-                const label = document.createElement('span');
-                label.textContent = note.label;
-                chip.append(icon, label);
-                list.appendChild(chip);
-            });
-            section.appendChild(list);
-            tip.appendChild(section);
-        }
-
-        tip.style.display = 'block';
-        const place = e => {
-            const rect = tip.getBoundingClientRect();
-            const anchor = event?.currentTarget?.getBoundingClientRect();
-            const x = e && e.clientX ? e.clientX : anchor ? anchor.left + anchor.width / 2 : 0;
-            const y = e && e.clientY ? e.clientY : anchor ? anchor.top + anchor.height / 2 : 0;
-            let left = x + 14, top = y + 14;
-            if (left + rect.width > window.innerWidth - 8) left = x - rect.width - 14;
-            if (top + rect.height > window.innerHeight - 8) top = y - rect.height - 14;
-            tip.style.left = Math.max(8, Math.min(left, window.innerWidth - rect.width - 8)) + 'px';
-            tip.style.top = Math.max(8, Math.min(top, window.innerHeight - rect.height - 8)) + 'px';
-        };
-        place(event);
-        host.onmousemove = place;
+        const seat = { rowLabel: details.section, seatLabel: details.seat, chartSeatType: details.type === 'Table' ? 'table' : 'row', categoryName: details.category, categoryId: details.color, seatStatus: details.status || 'Available', seatProps: details.props || {} };
+        const target = event && event.currentTarget;
+        const at = e => { if (e && e.clientX) return { x: e.clientX, y: e.clientY }; const r = target && target.getBoundingClientRect ? target.getBoundingClientRect() : null; return r ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : { x: 0, y: 0 }; };
+        const p = at(event);
+        showSeatTooltip(p.x, p.y, seat, seatTooltipPrice(details.category));
+        host.onmousemove = e => { const q = at(e); moveSeatTooltip(q.x, q.y); };
     }
     function showLoader(id) { const h = document.getElementById(id); if (!h) return; if (!document.getElementById('chartPreviewLoaderStyle')) { const st = document.createElement('style'); st.id = 'chartPreviewLoaderStyle'; st.textContent = '.cp-loader{position:absolute;inset:0;min-height:300px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#fff;font:600 13px system-ui,sans-serif;color:#6b7694}.cp-loader i{width:40px;height:40px;border:4px solid #e4e8f2;border-top-color:#4f46e5;border-radius:50%;animation:cpSpin .8s linear infinite}@keyframes cpSpin{to{transform:rotate(360deg)}}'; document.head.appendChild(st) } h.style.position = 'relative'; hideLoader(id); const l = document.createElement('div'); l.className = 'cp-loader'; l.innerHTML = '<i></i><span>Loading chart…</span>'; h.appendChild(l) }
     function hideLoader(id) { const h = document.getElementById(id); if (h) h.querySelectorAll('.cp-loader').forEach(x => x.remove()) }
-    function hideTip() { const t = document.getElementById('chartPreviewTooltip'); if (t) t.style.display = 'none' }
+    function hideTip() { const t = document.getElementById('seatTooltip'); if (t) t.style.display = 'none' }
     global.chartPreviewRenderer = { render, showLoader, hideLoader, toggleRowLabels() { showRows = !showRows; if (lastRender) render(lastRender.containerId, lastRender.chartJson, lastRender.seatsJson); return showRows; }, toggleSeatLabels() { showSeats = !showSeats; if (lastRender) render(lastRender.containerId, lastRender.chartJson, lastRender.seatsJson); return showSeats; } };
 })(window);
+
+/* Keep the chart sharp when the browser zoom or screen density changes after load. */
+(function watchPixelRatio() {
+    if (!window.matchMedia) return;
+    const mq = window.matchMedia('(resolution: ' + (window.devicePixelRatio || 1) + 'dppx)');
+    const onChange = () => {
+        if (window.fabric) fabric.devicePixelRatio = window.devicePixelRatio || 1;
+        const all = (window.fabricInterop && window.fabricInterop.canvases) || {};
+        Object.keys(all).forEach(id => { const c = all[id]; if (c && c.setDimensions) { c.setDimensions({ width: c.getWidth(), height: c.getHeight() }); c.requestRenderAll(); } });
+        watchPixelRatio();
+    };
+    if (mq.addEventListener) mq.addEventListener('change', onChange, { once: true });
+})();
