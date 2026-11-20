@@ -174,6 +174,15 @@
             background: var(--soft)
         }
 
+        .bt.manage-seats-shortcut {
+            color: var(--ac);
+        }
+
+        .bt.manage-seats-shortcut:hover {
+            border-color: #c9c5ff;
+            background: #f5f4ff;
+        }
+
         .bt.pr {
             background: var(--ac);
             border-color: var(--ac);
@@ -1214,6 +1223,10 @@
         <div class="logo"><img src="images/seatsq-logo.png" alt="SeatsQ" /></div><span class="crumb">/</span>
         <input id="title" class="ttl" placeholder="Enter chart name" maxlength="100" autocomplete="off" />
         <div class="sp"></div>
+        @if (!string.IsNullOrWhiteSpace(ChartID) && ChartID != "0")
+        {
+            <button type="button" class="bt manage-seats-shortcut" title="Manage seats for this chart" @onclick="OpenManageSeats"><i class="fa-solid fa-chair"></i> Manage seats</button>
+        }
         <button class="bt" id="cancel" @onclick="CancelChart"><i class="fa-solid fa-xmark"></i> Cancel</button>
         <button class="bt" id="copy" @onclick="CopyChart"><i class="fa-regular fa-copy"></i> Copy chart</button>
         <button class="bt pr" id="save" @onclick="SaveChart"><i class="fa-regular fa-floppy-disk"></i> Save layout</button>
@@ -1491,6 +1504,11 @@
     {
         if (module != null && !await module.InvokeAsync<bool>("canLeave")) return;
         NavManager.NavigateTo("home");
+    }
+
+    private void OpenManageSeats()
+    {
+        NavManager.NavigateTo($"manageseats/{Uri.EscapeDataString(ChartID)}");
     }
 
     // same lookup the Home page uses for its account card

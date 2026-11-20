@@ -35,14 +35,16 @@ SET NOCOUNT ON;
     )
     BEGIN
         UPDATE seat
-        SET status = @status
+        SET status = @status,
+            hold_token = CASE WHEN @status IN ('available', 'Free', 'notforsale') THEN NULL ELSE hold_token END
         WHERE chart_id = @chart_id
           AND seat_name = @seat_name;
     END
     ELSE
     BEGIN
         UPDATE TOP (1) seat
-        SET status = @status
+        SET status = @status,
+            hold_token = CASE WHEN @status IN ('available', 'Free', 'notforsale') THEN NULL ELSE hold_token END
         WHERE chart_id = @chart_id
           AND cat_name = @seat_name
           AND status = 'sold';

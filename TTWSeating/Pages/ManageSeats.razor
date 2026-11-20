@@ -1,0 +1,1272 @@
+@page "/manageseats"
+@page "/manageseats/{ChartId}"
+@attribute [Authorize]
+@implements IAsyncDisposable
+@using System.Collections.Specialized
+@using System.Data
+@using System.Text.Json
+@using DataLayer
+@using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
+@inject NavigationManager NavManager
+@inject ProtectedLocalStorage LocalStorage
+@inject IJSRuntime JS
+@inject ILogger<ManageSeats> Logger
+
+<PageTitle>Manage Seats | SeatsQ</PageTitle>
+
+<style>
+    .manage-seats-page {
+        min-height: 100vh;
+        background: var(--color-bg);
+        color: var(--color-text);
+        font: 13.5px/1.4 "Segoe UI", Inter, system-ui, sans-serif;
+    }
+
+    .manage-seats-shell {
+        display: grid;
+        grid-template-columns: 180px minmax(0, 1fr);
+        align-items: start;
+        gap: 22px;
+        min-height: 100vh;
+        padding: 10px;
+    }
+
+    .manage-seats-content {
+        min-width: 0;
+        padding: 0 0 32px;
+    }
+
+    .manage-seats-topbar,
+    .manage-seats-title-row,
+    .manage-seats-controls,
+    .manage-seats-stats {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        flex-wrap: wrap;
+    }
+
+    .manage-seats-topbar {
+        min-height: 44px;
+        margin-bottom: 18px;
+    }
+
+    .manage-seats-brand {
+        display: inline-flex;
+        align-items: center;
+        min-height: 40px;
+        text-decoration: none;
+    }
+
+    .manage-seats-brand img {
+        display: block;
+        width: 142px;
+        max-height: 40px;
+        object-fit: contain;
+        object-position: left center;
+    }
+
+    .manage-seats-back,
+    .manage-seats-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        min-height: 40px;
+        padding: 8px 14px;
+        border: 1px solid var(--color-border);
+        border-radius: 10px;
+        background: var(--color-surface);
+        color: var(--color-text);
+        font: inherit;
+        font-weight: 600;
+        text-decoration: none;
+        cursor: pointer;
+    }
+
+    .manage-seats-back:hover,
+    .manage-seats-button:hover:not(:disabled) {
+        background: #f7f8fc;
+    }
+
+    .manage-seats-button.primary {
+        border-color: var(--color-primary);
+        background: var(--color-primary);
+        color: var(--color-on-primary);
+    }
+
+    .manage-seats-button.primary:hover:not(:disabled) {
+        background: var(--color-primary-hover);
+    }
+
+    .manage-seats-button:disabled {
+        cursor: wait;
+        opacity: .6;
+    }
+
+    .manage-seats-title-row {
+        align-items: flex-end;
+        margin-bottom: 20px;
+    }
+
+    .manage-seats-title-row h1 {
+        margin: 0;
+        font-size: clamp(24px, 3vw, 32px);
+        font-weight: 750;
+        letter-spacing: -.03em;
+    }
+
+    .manage-seats-title-row p {
+        margin: 6px 0 0;
+        color: var(--color-text-muted);
+    }
+
+    .manage-seats-card {
+        margin-bottom: 18px;
+        padding: clamp(16px, 2.5vw, 24px);
+        border: 1px solid var(--color-border);
+        border-radius: 14px;
+        background: var(--color-surface);
+        box-shadow: var(--shadow-card);
+    }
+
+    .manage-seats-controls {
+        justify-content: flex-start;
+    }
+
+    .manage-seats-field {
+        display: grid;
+        flex: 1 1 260px;
+        gap: 6px;
+        max-width: 420px;
+        color: #6b7694;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    .manage-seats-field input,
+    .manage-seats-field select {
+        width: 100%;
+        min-height: 42px;
+        padding: 8px 11px;
+        border: 1px solid #e4e8f2;
+        border-radius: 9px;
+        background: #fff;
+        color: #1e2540;
+        font: 14px "Segoe UI", Inter, system-ui, sans-serif;
+    }
+
+    .manage-seats-chart-picker {
+        padding: 20px;
+    }
+
+    .manage-seats-picker-heading {
+        display: flex;
+        align-items: flex-start;
+        gap: 13px;
+        margin-bottom: 20px;
+    }
+
+    .manage-seats-picker-step {
+        display: grid;
+        flex: 0 0 38px;
+        width: 38px;
+        height: 38px;
+        place-items: center;
+        border-radius: 12px;
+        background: var(--color-primary-soft);
+        color: var(--color-primary);
+        font-size: 15px;
+        font-weight: 800;
+    }
+
+    .manage-seats-picker-heading h2 {
+        margin: 0;
+        color: #1e2540;
+        font-size: 17px;
+        font-weight: 750;
+    }
+
+    .manage-seats-picker-heading p {
+        margin: 4px 0 0;
+        color: #6b7694;
+        font-size: 13px;
+    }
+
+    .manage-seats-chart-search {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        max-width: 460px;
+        min-height: 44px;
+        margin-bottom: 14px;
+        padding: 0 13px;
+        border: 1px solid #e4e8f2;
+        border-radius: 11px;
+        background: #fff;
+        color: #8992a7;
+    }
+
+    .manage-seats-chart-search:focus-within {
+        border-color: var(--color-primary);
+        box-shadow: 0 0 0 3px var(--color-primary-soft);
+    }
+
+    .manage-seats-chart-search input {
+        width: 100%;
+        min-width: 0;
+        border: 0;
+        outline: 0;
+        background: transparent;
+        color: #1e2540;
+        font: inherit;
+    }
+
+    .manage-seats-chart-search input::placeholder {
+        color: #8992a7;
+    }
+
+    .manage-seats-chart-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr));
+        gap: 10px;
+        max-height: 270px;
+        padding: 2px 3px 4px 2px;
+        overflow-y: auto;
+    }
+
+    .manage-seats-chart-option {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        min-width: 0;
+        padding: 13px;
+        border: 1px solid #e4e8f2;
+        border-radius: 12px;
+        background: #fff;
+        color: #1e2540;
+        text-align: left;
+        transition: border-color .15s ease, background .15s ease, box-shadow .15s ease;
+    }
+
+    .manage-seats-chart-option:hover:not(:disabled) {
+        border-color: var(--color-primary);
+        background: var(--color-surface-tint);
+    }
+
+    .manage-seats-chart-option.selected {
+        border-color: var(--color-primary);
+        background: var(--color-primary-soft);
+        box-shadow: 0 0 0 2px var(--color-primary-soft);
+    }
+
+    .manage-seats-chart-option:disabled {
+        cursor: wait;
+        opacity: .65;
+    }
+
+    .manage-seats-chart-icon {
+        display: grid;
+        flex: 0 0 38px;
+        width: 38px;
+        height: 38px;
+        place-items: center;
+        border-radius: 10px;
+        background: #f3f5fa;
+        color: #69738e;
+    }
+
+    .manage-seats-chart-option.selected .manage-seats-chart-icon {
+        background: var(--color-primary-soft);
+        color: var(--color-primary);
+    }
+
+    .manage-seats-chart-option-info {
+        display: grid;
+        flex: 1;
+        min-width: 0;
+        gap: 3px;
+    }
+
+    .manage-seats-chart-option-info strong {
+        overflow: hidden;
+        font-size: 13px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .manage-seats-chart-option-info small {
+        color: #7b849c;
+        font-size: 11px;
+    }
+
+    .manage-seats-chart-check {
+        display: grid;
+        flex: 0 0 22px;
+        width: 22px;
+        height: 22px;
+        place-items: center;
+        border: 1px solid #dfe3ed;
+        border-radius: 50%;
+        color: transparent;
+    }
+
+    .manage-seats-chart-option.selected .manage-seats-chart-check {
+        border-color: var(--color-primary);
+        background: var(--color-primary);
+        color: var(--color-on-primary);
+    }
+
+    .manage-seats-chart-picker-status {
+        margin-top: 12px;
+        color: #6b7694;
+        font-size: 12px;
+    }
+
+    .manage-seats-stats {
+        justify-content: flex-start;
+        margin-top: 20px;
+    }
+
+    .manage-seats-stat {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 7px 11px;
+        border-radius: 999px;
+        background: #f7f8fc;
+        color: #56617f;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    .manage-seats-stat strong {
+        color: #1e2540;
+    }
+
+    .manage-seats-message {
+        margin: 16px 0 0;
+        padding: 11px 13px;
+        border-radius: 9px;
+        font-size: 13px;
+    }
+
+    .manage-seats-message.error {
+        background: #fde8e9;
+        color: #a52c35;
+    }
+
+    .manage-seats-message.success {
+        background: #e7f8ef;
+        color: #168a4c;
+    }
+
+    .manage-seats-table-wrap {
+        overflow-x: auto;
+    }
+
+    .manage-seats-table {
+        width: 100%;
+        min-width: 680px;
+        border-collapse: collapse;
+    }
+
+    .manage-seats-table th,
+    .manage-seats-table td {
+        padding: 13px 12px;
+        border-bottom: 1px solid #e9ecf3;
+        text-align: left;
+    }
+
+    .manage-seats-table th {
+        color: #6b7694;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .05em;
+        text-transform: uppercase;
+    }
+
+    .manage-seats-table tr:last-child td {
+        border-bottom: 0;
+    }
+
+    .manage-seats-status {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: #f0f2f7;
+        color: #56617f;
+        font-size: 11px;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+
+    .manage-seats-status.available {
+        background: #e7f8ef;
+        color: #168a4c;
+    }
+
+    .manage-seats-status.booked {
+        background: #fde8e9;
+        color: #a52c35;
+    }
+
+    .manage-seats-status.not-for-sale {
+        background: #eee8e2;
+        color: #6b5747;
+    }
+
+    .manage-seats-empty {
+        padding: 32px 16px;
+        color: #6b7694;
+        text-align: center;
+    }
+
+    .manage-seats-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 300px;
+        gap: 18px;
+        align-items: start;
+    }
+
+    .manage-seats-map-card {
+        min-width: 0;
+        overflow: hidden;
+    }
+
+    .manage-seats-map-toolbar {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 12px;
+    }
+
+    .manage-seats-map-toolbar .manage-seats-legend {
+        margin-bottom: 0;
+    }
+
+    .manage-seats-map-controls {
+        display: flex;
+        flex: 0 0 auto;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .manage-seats-map-controls .manage-seats-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 38px;
+        min-height: 38px;
+        padding: 7px 10px;
+        font-size: 13px;
+    }
+
+    .manage-seats-map-toggle {
+        gap: 7px;
+        font-size: 12px !important;
+    }
+
+    .manage-seats-map {
+        min-height: 520px;
+        border: 1px solid var(--color-border);
+        border-radius: 12px;
+        background: var(--color-surface);
+        overflow: auto;
+        touch-action: none;
+        cursor: grab;
+        overscroll-behavior: contain;
+    }
+
+    .manage-seats-map-card.expanded {
+        position: fixed;
+        inset: 0;
+        z-index: 2000;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        margin: 0;
+        padding: 12px;
+        overflow: hidden;
+        border: 0;
+        border-radius: 0;
+        background: var(--color-surface);
+    }
+
+    .manage-seats-map-card.expanded .manage-seats-map-toolbar {
+        flex: 0 0 auto;
+        align-items: center;
+        margin: 0;
+    }
+
+    .manage-seats-map-card.expanded .manage-seats-map {
+        flex: 1 1 auto;
+        width: 100%;
+        min-height: 0 !important;
+        height: auto;
+        max-height: none;
+    }
+
+    .manage-seats-map-card.expanded .manage-seats-map svg {
+        width: 100% !important;
+        height: 100% !important;
+        min-width: 0 !important;
+        min-height: 0 !important;
+    }
+
+    .manage-seats-map circle[data-seat] {
+        cursor: pointer;
+        transition: fill .12s ease, stroke .12s ease, opacity .12s ease;
+    }
+
+    .manage-seats-map circle[data-seat]:hover {
+        stroke: #1e2540 !important;
+        stroke-width: 3px !important;
+    }
+
+    .manage-seats-selected {
+        position: sticky;
+        top: 16px;
+    }
+
+    .manage-seats-selected h2 {
+        margin: 0 0 8px;
+        font-size: 17px;
+    }
+
+    .manage-seats-selected p {
+        color: #6b7694;
+        font-size: 13px;
+    }
+
+    .manage-seats-selection-summary {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+        margin: 14px 0;
+    }
+
+    .manage-seats-selection-summary span {
+        padding: 5px 9px;
+        border-radius: 999px;
+        background: #f7f8fc;
+        color: #56617f;
+        font-size: 11px;
+        font-weight: 700;
+    }
+
+    .manage-seats-action-card {
+        margin: 16px 0;
+        padding: 14px;
+        border: 1px solid #f0d8df;
+        border-radius: 12px;
+        background: #fff8fa;
+    }
+
+    .manage-seats-action-card h3 {
+        margin: 0;
+        color: #1e2540;
+        font-size: 14px;
+    }
+
+    .manage-seats-action-card p {
+        margin: 6px 0 12px;
+        font-size: 12px;
+    }
+
+    .manage-seats-action-card .manage-seats-button {
+        width: 100%;
+    }
+
+    .manage-seats-action-card .manage-seats-button:disabled {
+        border-color: #e4e8f2;
+        background: #f0f2f7;
+        color: #8992a7;
+        opacity: 1;
+    }
+
+    .manage-seats-list-title {
+        margin: 14px 0 0;
+        color: #56617f;
+        font-size: 12px;
+        font-weight: 700;
+    }
+
+    .manage-seats-selected-list {
+        display: grid;
+        gap: 8px;
+        max-height: 260px;
+        margin: 14px 0;
+        padding: 0;
+        overflow: auto;
+        list-style: none;
+    }
+
+    .manage-seats-selected-list li {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        padding: 9px 10px;
+        border: 1px solid #e4e8f2;
+        border-radius: 9px;
+        font-size: 12px;
+    }
+
+    .manage-seats-selected-actions {
+        display: grid;
+        gap: 8px;
+    }
+
+    .manage-seats-legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-bottom: 12px;
+        color: #56617f;
+        font-size: 12px;
+    }
+
+    .manage-seats-legend span {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .manage-seats-legend i {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #7B1E3A;
+    }
+
+    .manage-seats-legend .booked { background: #8992a7; }
+    .manage-seats-legend .not-for-sale { background: #bfa692; }
+    .manage-seats-legend .selected { background: #f59e0b; }
+
+    @@media (max-width: 900px) {
+        .manage-seats-layout { grid-template-columns: minmax(0, 1fr); }
+        .manage-seats-selected { position: static; }
+    }
+
+    @@media (max-width: 760px) {
+        .manage-seats-shell {
+            grid-template-columns: minmax(0, 1fr);
+            gap: 14px;
+            padding: 12px;
+        }
+
+        .manage-seats-content { padding-top: 0; }
+    }
+
+    @@media (max-width: 600px) {
+        .manage-seats-shell { gap: 12px; }
+        .manage-seats-topbar { min-height: 40px; margin-bottom: 14px; }
+        .manage-seats-title-row { align-items: flex-start; gap: 10px; }
+        .manage-seats-title-row h1 { font-size: 25px; }
+        .manage-seats-title-row p { font-size: 13px; }
+        .manage-seats-card { padding: 14px; border-radius: 14px; }
+        .manage-seats-chart-picker { padding: 16px; }
+        .manage-seats-chart-list { grid-template-columns: minmax(0, 1fr); max-height: 240px; }
+        .manage-seats-chart-search { max-width: none; }
+        .manage-seats-stats { gap: 7px; }
+        .manage-seats-stat { padding: 6px 9px; font-size: 11px; }
+        .manage-seats-map { min-height: 360px; max-height: 65vh; }
+        .manage-seats-map svg { min-width: 0; max-width: 100%; }
+        .manage-seats-map-toolbar { align-items: flex-start; flex-wrap: wrap; }
+        .manage-seats-map-controls { width: 100%; justify-content: flex-end; }
+        .manage-seats-map-controls .manage-seats-button { min-width: 42px; min-height: 42px; }
+        .manage-seats-map-toggle { min-height: 42px !important; padding: 8px 10px !important; }
+        .manage-seats-legend { gap: 8px 12px; font-size: 11px; }
+        .manage-seats-selected-actions .manage-seats-button,
+        .manage-seats-action-card .manage-seats-button { min-height: 44px; }
+    }
+
+    @@media (max-width: 520px) {
+        .manage-seats-shell { padding: 9px; }
+    }
+
+    @@media (max-width: 380px) {
+        .manage-seats-shell { padding: 7px; }
+        .manage-seats-picker-heading { gap: 9px; }
+        .manage-seats-picker-heading h2 { font-size: 15px; }
+        .manage-seats-picker-heading p { font-size: 12px; }
+        .manage-seats-picker-step { flex-basis: 34px; width: 34px; height: 34px; }
+        .manage-seats-chart-option { gap: 8px; padding: 10px; }
+        .manage-seats-chart-icon { flex-basis: 34px; width: 34px; height: 34px; }
+        .manage-seats-map-card.expanded { inset: 0; padding: 8px; }
+        .manage-seats-map-card.expanded .manage-seats-map-toolbar { align-items: flex-start; }
+        .manage-seats-map-card.expanded .manage-seats-legend { max-width: calc(100% - 112px); }
+        .manage-seats-map-card.expanded .manage-seats-map { min-height: 0 !important; max-height: none; }
+    }
+</style>
+
+<div class="manage-seats-page">
+    <div class="manage-seats-shell">
+        <SeatsQSidebar ActiveView="seats" UserEmail="@UserEmail" ViewChanged="SetSidebarView" />
+        <main class="manage-seats-content">
+            <header class="manage-seats-topbar">
+                <a class="manage-seats-back" href="home"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i> Back to charts</a>
+            </header>
+
+    <div class="manage-seats-title-row">
+        <div>
+            <h1>Manage seats</h1>
+            <p>Choose a chart published on the ticketing site, then select seats on its map to manage them.</p>
+        </div>
+        @if (!string.IsNullOrWhiteSpace(SelectedChartId))
+        {
+            <button type="button" class="manage-seats-button" @onclick="LoadSeatsAsync" disabled="@isLoadingSeats">
+                <i class="fa-solid fa-rotate" aria-hidden="true"></i> Refresh seats
+            </button>
+        }
+    </div>
+
+    <section class="manage-seats-card manage-seats-chart-picker" aria-label="Choose a chart">
+        <div class="manage-seats-picker-heading">
+            <span class="manage-seats-picker-step" aria-hidden="true">1</span>
+            <div>
+                <h2>Choose a seating chart</h2>
+                <p>Select the ticketing chart whose seats you want to manage.</p>
+            </div>
+        </div>
+
+        @if (Charts.Count > 0)
+        {
+            <label class="manage-seats-chart-search" for="chart-search">
+                <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                <input id="chart-search" type="search" placeholder="Search charts by name or number..." @bind="chartSearch" @bind:event="oninput" aria-label="Search charts by name or number" />
+            </label>
+        }
+
+        @if (isLoadingCharts)
+        {
+            <div class="manage-seats-chart-picker-status" role="status">Loading your ticketing charts...</div>
+        }
+        else if (Charts.Count == 0)
+        {
+            <div class="manage-seats-empty">No active charts with a saved layout and ticketing link were found.</div>
+        }
+        else if (!FilteredCharts.Any())
+        {
+            <div class="manage-seats-chart-picker-status" role="status">No charts match “@chartSearch”. Try another name or chart number.</div>
+        }
+        else
+        {
+            <div class="manage-seats-chart-list" role="group" aria-label="Available charts">
+                @foreach (var chart in FilteredCharts)
+                {
+                    var isSelectedChart = chart.Id == SelectedChartId;
+                    <button @key="chart.Id" type="button" class="manage-seats-chart-option @(isSelectedChart ? "selected" : "")" aria-pressed="@isSelectedChart" disabled="@(isLoadingSeats || isUpdating)" @onclick="() => OnChartChangedAsync(new ChangeEventArgs { Value = chart.Id })">
+                        <span class="manage-seats-chart-icon" aria-hidden="true"><i class="fa-regular fa-map"></i></span>
+                        <span class="manage-seats-chart-option-info">
+                            <strong>@chart.Title</strong>
+                            <small>Chart #@chart.Id</small>
+                        </span>
+                        <span class="manage-seats-chart-check" aria-hidden="true"><i class="fa-solid fa-check"></i></span>
+                    </button>
+                }
+            </div>
+            <div class="manage-seats-chart-picker-status" aria-live="polite">
+                @if (SelectedChart is not null)
+                {
+                    <span>Selected: <strong>@SelectedChart.Title</strong> · Chart #@SelectedChart.Id</span>
+                }
+                else
+                {
+                    <span>@Charts.Count chart(s) available. Choose one to load its seating map.</span>
+                }
+            </div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(chartError))
+        {
+            <div class="manage-seats-message error" role="alert">@chartError</div>
+        }
+        @if (!string.IsNullOrWhiteSpace(seatError))
+        {
+            <div class="manage-seats-message error" role="alert">@seatError</div>
+        }
+        @if (!string.IsNullOrWhiteSpace(successMessage))
+        {
+            <div class="manage-seats-message success" role="status">@successMessage</div>
+        }
+    </section>
+
+    @if (!string.IsNullOrWhiteSpace(SelectedChartId))
+    {
+        <div class="manage-seats-stats" aria-live="polite" style="margin-bottom: 14px;">
+            <span class="manage-seats-stat"><strong>@managedSeats.Count</strong> total</span>
+            <span class="manage-seats-stat"><strong>@availableCount</strong> available</span>
+            <span class="manage-seats-stat"><strong>@bookedCount</strong> booked / reserved</span>
+            <span class="manage-seats-stat"><strong>@notForSaleCount</strong> not for sale</span>
+        </div>
+
+        @if (SelectedChart is not null)
+        {
+            <div class="manage-seats-layout">
+                <section class="manage-seats-card manage-seats-map-card @(isMapExpanded ? "expanded" : "")" aria-label="Interactive seating chart">
+                    <div class="manage-seats-map-toolbar">
+                        <div class="manage-seats-legend" aria-label="Seat status legend">
+                            <span><i></i> Available</span>
+                            <span><i class="booked"></i> Booked</span>
+                            <span><i class="not-for-sale"></i> Not for sale</span>
+                            <span><i class="selected"></i> Selected</span>
+                        </div>
+                        <div class="manage-seats-map-controls" role="group" aria-label="Seating chart zoom controls">
+                            <button type="button" class="manage-seats-button" @onclick="() => ZoomSeatMapAsync(1.5)" aria-label="Zoom in" title="Zoom in"><i class="fa-solid fa-plus" aria-hidden="true"></i></button>
+                            <button type="button" class="manage-seats-button" @onclick="() => ZoomSeatMapAsync(0.67)" aria-label="Zoom out" title="Zoom out"><i class="fa-solid fa-minus" aria-hidden="true"></i></button>
+                            <button type="button" class="manage-seats-button" @onclick="ResetSeatMapZoomAsync" aria-label="Reset zoom" title="Reset zoom"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i></button>
+                            <button type="button" class="manage-seats-button manage-seats-map-toggle" @onclick="ToggleMapExpanded" aria-pressed="@isMapExpanded" aria-label="@(isMapExpanded ? "Close full-screen seating chart" : "Show full-screen seating chart")">
+                                <i class="fa-solid @(isMapExpanded ? "fa-compress" : "fa-expand")" aria-hidden="true"></i>
+                                @(isMapExpanded ? "Close" : "Full screen")
+                            </button>
+                        </div>
+                    </div>
+                    @if (isLoadingSeats)
+                    {
+                        <div class="manage-seats-empty" role="status">Loading seating chart...</div>
+                    }
+                    else if (!string.IsNullOrWhiteSpace(SelectedChart.ChartJson))
+                    {
+                        <div id="manage-seats-chart" class="manage-seats-map" aria-label="Click seats on the chart to select them"></div>
+                    }
+                    else
+                    {
+                        <div class="manage-seats-empty">This ticketing chart has no saved seating layout.</div>
+                    }
+                </section>
+
+                <aside class="manage-seats-card manage-seats-selected" aria-label="Seat management actions">
+                    <h2>Manage selected seats</h2>
+                    <p>Select seats directly on the map. Only available seats can be taken off sale.</p>
+                    <div class="manage-seats-selection-summary" aria-live="polite">
+                        <span>@selectedSeats.Count selected</span>
+                        <span>@selectedAvailableCount available</span>
+                    </div>
+
+                    <section class="manage-seats-action-card" aria-label="Take seats off sale">
+                        <h3>Not for sale</h3>
+                        <p>Selected available seats will be hidden from ticket buyers. You can put them back on sale later.</p>
+                        <button type="button" class="manage-seats-button primary" @onclick='() => UpdateSelectedSeatsAsync("notforsale")' disabled="@(isUpdating || selectedAvailableCount == 0)">
+                            @if (isUpdating)
+                            {
+                                <span>Updating seats...</span>
+                            }
+                            else if (selectedAvailableCount > 0)
+                            {
+                                <span>Take @selectedAvailableCount seat(s) off sale</span>
+                            }
+                            else
+                            {
+                                <span>Select available seats first</span>
+                            }
+                        </button>
+                    </section>
+
+                    @if (selectedNotForSaleCount > 0)
+                    {
+                        <div class="manage-seats-selected-actions">
+                            <button type="button" class="manage-seats-button" @onclick='() => UpdateSelectedSeatsAsync("available")' disabled="@isUpdating">Put @selectedNotForSaleCount seat(s) back on sale</button>
+                        </div>
+                    }
+                    @if (selectedBookedCount > 0)
+                    {
+                        <div class="manage-seats-selected-actions" style="margin-top: 8px;">
+                            <button type="button" class="manage-seats-button" @onclick='() => UpdateSelectedSeatsAsync("available", true)' disabled="@isUpdating">Release @selectedBookedCount booking(s)</button>
+                        </div>
+                    }
+
+                    @if (selectedSeats.Count > 0)
+                    {
+                        <h3 class="manage-seats-list-title">Selected seats</h3>
+                        <ul class="manage-seats-selected-list">
+                            @foreach (var seat in SelectedSeatItems)
+                            {
+                                <li @key="seat.SeatName">
+                                    <span><strong>@seat.SeatName</strong><br />@GetStatusLabel(seat.Status)</span>
+                                    <button type="button" class="manage-seats-button" aria-label="Remove @seat.SeatName from selection" @onclick="() => ToggleSeatSelection(seat.SeatName)">×</button>
+                                </li>
+                            }
+                        </ul>
+                    }
+                </aside>
+            </div>
+        }
+    }
+        </main>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public string? ChartId { get; set; }
+
+    private const string SeatMapContainerId = "manage-seats-chart";
+    private List<ChartChoice> Charts { get; set; } = new();
+    private List<ManagedSeat> managedSeats = new();
+    private readonly HashSet<string> selectedSeats = new(StringComparer.OrdinalIgnoreCase);
+    private DotNetObjectReference<ManageSeats>? seatMapReference;
+    private string UserId = "0";
+    private string UserEmail = "";
+    private string SelectedChartId = "";
+    private string chartSearch = "";
+    private string? chartError;
+    private string? seatError;
+    private string? successMessage;
+    private bool isLoadingCharts = true;
+    private bool isLoadingSeats;
+    private bool isUpdating;
+    private bool isMapExpanded;
+    private bool chartRenderPending;
+
+    private ChartChoice? SelectedChart => Charts.FirstOrDefault(chart => chart.Id == SelectedChartId);
+    private IEnumerable<ChartChoice> FilteredCharts => string.IsNullOrWhiteSpace(chartSearch)
+        ? Charts
+        : Charts.Where(chart => chart.Title.Contains(chartSearch.Trim(), StringComparison.OrdinalIgnoreCase) ||
+            chart.Id.Contains(chartSearch.Trim(), StringComparison.OrdinalIgnoreCase));
+    private IEnumerable<ManagedSeat> SelectedSeatItems => managedSeats.Where(seat => selectedSeats.Contains(seat.SeatName));
+    private int selectedAvailableCount => SelectedSeatItems.Count(seat => IsAvailable(seat.Status));
+    private int selectedNotForSaleCount => SelectedSeatItems.Count(seat => IsNotForSale(seat.Status));
+    private int selectedBookedCount => SelectedSeatItems.Count(seat => IsBooked(seat.Status));
+    private int availableCount => managedSeats.Count(seat => IsAvailable(seat.Status));
+    private int bookedCount => managedSeats.Count(seat => IsBooked(seat.Status));
+    private int notForSaleCount => managedSeats.Count(seat => IsNotForSale(seat.Status));
+
+    protected override async Task OnInitializedAsync()
+    {
+        var emailResult = await LocalStorage.GetAsync<string>("UserEmail");
+        if (emailResult.Success)
+        {
+            UserEmail = emailResult.Value ?? "";
+        }
+
+        var userResult = await LocalStorage.GetAsync<string>("UserId");
+        UserId = userResult.Value ?? "0";
+        if (!userResult.Success || string.IsNullOrWhiteSpace(UserId) || UserId == "0")
+        {
+            NavManager.NavigateTo("/");
+            return;
+        }
+
+        await LoadChartsAsync();
+        if (!string.IsNullOrWhiteSpace(ChartId))
+        {
+            if (Charts.Any(chart => chart.Id == ChartId))
+            {
+                SelectedChartId = ChartId;
+                await LoadSeatsAsync();
+            }
+            else
+            {
+                chartError = "That chart is not available in your account.";
+            }
+        }
+    }
+
+    private void SetSidebarView(string view)
+    {
+        if (view == "settings")
+        {
+            NavManager.NavigateTo("home?view=settings");
+        }
+        else if (view == "charts")
+        {
+            NavManager.NavigateTo("home");
+        }
+    }
+
+    private async Task LoadChartsAsync()
+    {
+        isLoadingCharts = true;
+        chartError = null;
+        try
+        {
+            var data = await Task.Run(() =>
+            {
+                var parameters = new NameValueCollection
+                {
+                    ["chart_id"] = "0",
+                    ["log_id"] = UserId,
+                    ["chart_key"] = "",
+                    ["option"] = "U"
+                };
+                var chartData = new DataSet();
+                new cdlChart().GetChartCategory(parameters, ref chartData);
+                return chartData;
+            });
+
+            if (data.Tables.Count == 0)
+            {
+                throw new InvalidOperationException("The chart query returned no result table.");
+            }
+
+            Charts = data.Tables[0].AsEnumerable()
+                .Where(row => row.Table.Columns.Contains("chart_json") && !string.IsNullOrWhiteSpace(row["chart_json"]?.ToString()) &&
+                    row.Table.Columns.Contains("chart_key") && !string.IsNullOrWhiteSpace(row["chart_key"]?.ToString()))
+                .Select(row => new ChartChoice(
+                    row["chart_id"]?.ToString() ?? "",
+                    row.Table.Columns.Contains("chart_title") ? row["chart_title"]?.ToString() ?? "Untitled chart" : "Untitled chart",
+                    row["chart_key"]?.ToString() ?? "",
+                    row["chart_json"]?.ToString() ?? ""))
+                .Where(chart => !string.IsNullOrWhiteSpace(chart.Id))
+                .OrderBy(chart => chart.Title, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Unable to load charts for seat management.");
+            chartError = "Unable to load charts. Please refresh and try again.";
+        }
+        finally
+        {
+            isLoadingCharts = false;
+        }
+    }
+
+    private async Task OnChartChangedAsync(ChangeEventArgs args)
+    {
+        SelectedChartId = args.Value?.ToString() ?? "";
+        ChartId = string.IsNullOrWhiteSpace(SelectedChartId) ? null : SelectedChartId;
+        managedSeats.Clear();
+        selectedSeats.Clear();
+        chartRenderPending = false;
+        successMessage = null;
+        seatError = null;
+        if (!string.IsNullOrWhiteSpace(SelectedChartId))
+        {
+            NavManager.NavigateTo($"manageseats/{Uri.EscapeDataString(SelectedChartId)}", replace: true);
+            await LoadSeatsAsync();
+        }
+        else
+        {
+            NavManager.NavigateTo("manageseats", replace: true);
+        }
+    }
+
+    private void ToggleMapExpanded()
+    {
+        isMapExpanded = !isMapExpanded;
+    }
+
+    private Task ZoomSeatMapAsync(double factor) => JS.InvokeVoidAsync("chartPreviewRenderer.zoom", SeatMapContainerId, factor).AsTask();
+
+    private Task ResetSeatMapZoomAsync() => JS.InvokeVoidAsync("chartPreviewRenderer.resetZoom", SeatMapContainerId).AsTask();
+
+    private async Task LoadSeatsAsync()
+    {
+        if (string.IsNullOrWhiteSpace(SelectedChartId) || isLoadingSeats)
+        {
+            return;
+        }
+
+        isLoadingSeats = true;
+        seatError = null;
+        successMessage = null;
+        try
+        {
+            var chartId = SelectedChartId;
+            var data = await Task.Run(() =>
+            {
+                var parameters = new NameValueCollection
+                {
+                    ["chart_id"] = chartId,
+                    ["row_name"] = "",
+                    ["cat_name"] = "",
+                    ["seat_name"] = "",
+                    ["option"] = "C"
+                };
+                var seatData = new DataSet();
+                new cdlSeat().Getseats(parameters, ref seatData);
+                return seatData;
+            });
+
+            if (data.Tables.Count == 0)
+            {
+                throw new InvalidOperationException("The seat query returned no result table.");
+            }
+
+            managedSeats = data.Tables[0].AsEnumerable()
+                .Select(row => new ManagedSeat(
+                    row["seat_name"]?.ToString() ?? "",
+                    row["row_name"]?.ToString() ?? "",
+                    row["cat_name"]?.ToString() ?? "",
+                    row["status"]?.ToString() ?? "available"))
+                .ToList();
+            chartRenderPending = true;
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Unable to load seats for chart {ChartId}.", SelectedChartId);
+            seatError = "Unable to load seats. Please refresh and try again.";
+        }
+        finally
+        {
+            isLoadingSeats = false;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!chartRenderPending || SelectedChart is null || isLoadingSeats)
+        {
+            return;
+        }
+
+        chartRenderPending = false;
+        try
+        {
+            var seatData = managedSeats.Select(seat => new
+            {
+                seat_name = seat.SeatName,
+                row_name = seat.RowName,
+                cat_name = seat.CategoryName,
+                status = seat.Status
+            });
+            await JS.InvokeVoidAsync("chartPreviewRenderer.render", SeatMapContainerId, SelectedChart.ChartJson, JsonSerializer.Serialize(seatData));
+            await JS.InvokeVoidAsync("chartPreviewRenderer.enableNavigation", SeatMapContainerId);
+            seatMapReference ??= DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("seatManagementInterop.bindChart", SeatMapContainerId, seatMapReference);
+            await JS.InvokeVoidAsync("seatManagementInterop.setSelectedSeats", SeatMapContainerId, selectedSeats.ToArray());
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Unable to render the seating map for chart {ChartId}.", SelectedChart.Id);
+            chartError = "Unable to render the seating map. Please refresh and try again.";
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    [JSInvokable]
+    public async Task ToggleSeatSelection(string seatName)
+    {
+        if (!managedSeats.Any(seat => string.Equals(seat.SeatName, seatName, StringComparison.OrdinalIgnoreCase)))
+        {
+            seatError = $"Seat {seatName} is not registered for this chart.";
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        if (!selectedSeats.Add(seatName))
+        {
+            selectedSeats.Remove(seatName);
+        }
+
+        await InvokeAsync(StateHasChanged);
+        await JS.InvokeVoidAsync("seatManagementInterop.setSelectedSeats", SeatMapContainerId, selectedSeats.ToArray());
+    }
+
+    private async Task UpdateSelectedSeatsAsync(string newStatus, bool confirmRelease = false)
+    {
+        if (isUpdating || string.IsNullOrWhiteSpace(SelectedChartId))
+        {
+            return;
+        }
+
+        var eligibleSeats = SelectedSeatItems.Where(seat => newStatus == "available"
+            ? (confirmRelease ? IsBooked(seat.Status) : IsNotForSale(seat.Status))
+            : (newStatus == "notforsale" && IsAvailable(seat.Status))).ToList();
+        if (eligibleSeats.Count == 0)
+        {
+            return;
+        }
+
+        if (confirmRelease && !await JS.InvokeAsync<bool>("confirm", $"Release the bookings for {eligibleSeats.Count} selected seat(s)?"))
+        {
+            return;
+        }
+
+        isUpdating = true;
+        seatError = null;
+        successMessage = null;
+        var chartId = SelectedChartId;
+        var updatedCount = 0;
+        try
+        {
+            foreach (var seat in eligibleSeats)
+            {
+                var parameters = new NameValueCollection
+                {
+                    ["chart_id"] = chartId,
+                    ["seat_name"] = seat.SeatName,
+                    ["status"] = newStatus
+                };
+                await Task.Run(() => new cdlSeat().UpdateSeat(parameters));
+                updatedCount++;
+            }
+
+            selectedSeats.Clear();
+            await LoadSeatsAsync();
+            successMessage = newStatus == "notforsale"
+                ? $"{updatedCount} seat(s) marked not for sale."
+                : confirmRelease
+                    ? $"{updatedCount} booking(s) released."
+                    : $"{updatedCount} seat(s) put back on sale.";
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(exception, "Unable to update selected seats for chart {ChartId}.", chartId);
+            seatError = updatedCount == 0
+                ? "Unable to update the selected seats. Please refresh and try again."
+                : $"Updated {updatedCount} seat(s), but another update failed. Refresh to check the latest statuses.";
+        }
+        finally
+        {
+            isUpdating = false;
+        }
+    }
+
+    private static bool IsBooked(string? status) =>
+        string.Equals(status?.Trim(), "sold", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(status?.Trim(), "booked", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(status?.Trim(), "reserved", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsNotForSale(string? status) =>
+        string.Equals(status?.Trim(), "notforsale", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsAvailable(string? status) =>
+        string.Equals(status?.Trim(), "available", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(status?.Trim(), "free", StringComparison.OrdinalIgnoreCase);
+
+    private static string GetStatusLabel(string? status)
+    {
+        if (IsAvailable(status)) return "Available";
+        if (string.Equals(status?.Trim(), "reserved", StringComparison.OrdinalIgnoreCase)) return "Reserved";
+        if (IsBooked(status)) return "Booked";
+        if (IsNotForSale(status)) return "Not for sale";
+        return string.IsNullOrWhiteSpace(status) ? "Unknown" : status;
+    }
+
+    private static string GetStatusClass(string? status)
+    {
+        if (IsAvailable(status)) return "available";
+        if (IsBooked(status)) return "booked";
+        return IsNotForSale(status) ? "not-for-sale" : "";
+    }
+
+    private static string GetActionLabel(string? status)
+    {
+        if (IsBooked(status)) return "Release booking";
+        return IsNotForSale(status) ? "Put on sale" : "Mark not for sale";
+    }
+
+    private sealed record ChartChoice(string Id, string Title, string ChartKey, string ChartJson);
+    private sealed record ManagedSeat(string SeatName, string RowName, string CategoryName, string Status);
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("seatManagementInterop.unbindChart", SeatMapContainerId);
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+        finally
+        {
+            seatMapReference?.Dispose();
+        }
+    }
+}

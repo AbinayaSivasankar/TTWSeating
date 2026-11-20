@@ -119,13 +119,13 @@
 @media (max-width: 760px) {
     .sq-side {
         position: static;
+        display: flex;
         flex: 0 0 auto;
         width: 100%;
         min-height: 0;
-        flex-direction: row;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 12px;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
     }
 
     .sq-brand {
@@ -137,19 +137,35 @@
     }
 
     .sq-nav {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
         width: 100%;
-        flex-direction: row;
-        flex-wrap: wrap;
+        gap: 6px;
     }
 
     .sq-nav-item {
-        flex: 1 1 auto;
         justify-content: center;
+        min-width: 0;
+        min-height: 42px;
+        gap: 6px;
+        padding: 8px 5px;
+        font-size: 11px;
+        white-space: nowrap;
+    }
+
+    .sq-nav-item svg {
+        flex: 0 0 14px;
+        width: 14px;
+        height: 14px;
     }
 }
 
-@media (max-width: 360px) {
+@media (max-width: 380px) {
     .sq-brand-logo {
         width: min(100%, 140px);
     }
+
+    .sq-nav { gap: 4px; }
+    .sq-nav-item { gap: 4px; padding-right: 3px; padding-left: 3px; font-size: 10px; }
+    .sq-nav-item svg { flex-basis: 12px; width: 12px; height: 12px; }
 }

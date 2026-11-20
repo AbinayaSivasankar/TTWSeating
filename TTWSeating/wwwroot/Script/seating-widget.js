@@ -1356,7 +1356,7 @@ window.fabricInterop = {
                     }
                 }
 
-                if (['sold', 'booked', 'reserved'].includes(String(seatStatus).toLowerCase())) {
+                if (['sold', 'booked', 'reserved', 'notforsale'].includes(String(seatStatus).toLowerCase())) {
                     return;
                 }
 
@@ -1799,6 +1799,9 @@ window.fabricInterop = {
                         case 'reserved':
                             color = "#e7e7e7";
                             break;
+                        case 'notforsale':
+                            color = "#bfa692";
+                            break;
                         case 'selected':
                             color = "#4CAF50";
                             break;
@@ -1807,7 +1810,7 @@ window.fabricInterop = {
                             color = seat.categoryId || "#f2fd58";
                             break;
                     }
-                    const isUnavailable = ['sold', 'booked', 'reserved'].includes(status);
+                    const isUnavailable = ['sold', 'booked', 'reserved', 'notforsale'].includes(status);
                     seat.set('hoverCursor', isUnavailable ? 'default' : 'pointer');
                     if (seat.circle) {
                         seat.circle.set('hoverCursor', isUnavailable ? 'default' : 'pointer');
@@ -9163,13 +9166,14 @@ function showSeatTooltip(x, y, seat, price, showPrice = true) {
     const head = make('div', 'cpt-head');
     const dot = make('span', 'cpt-dot'); dot.style.background = color;
     head.append(dot, make('span', 'cpt-cat', get('categoryName') || 'Seat'));
-    const statusText = String(get('seatStatus') || 'Available');
+    const statusText = String(get('seatStatus') || 'Available').trim();
     const statusKey = statusText.toLowerCase();
-    const status = make('span', 'cpt-status', statusText);
+    const statusLabel = statusKey === 'notforsale' ? 'Not for sale' : statusText;
+    const status = make('span', 'cpt-status', statusLabel);
     if (statusKey === 'available') status.classList.add('available');
     else if (/selected/.test(statusKey)) status.classList.add('selected');
     else if (/hold|held|reserved|pending/.test(statusKey)) status.classList.add('held');
-    else if (/booked|sold|unavailable|occupied/.test(statusKey)) status.classList.add('unavailable');
+    else if (/booked|sold|unavailable|occupied|notforsale/.test(statusKey)) status.classList.add('unavailable');
     head.appendChild(status);
     tip.appendChild(head);
 
@@ -9864,6 +9868,7 @@ async function getAvailableCount(chartId, categoryName, areaLabel) {
     'use strict';
     const NS = 'http://www.w3.org/2000/svg', R = 9, SP = 26;
     let lastRender = null, showRows = true, showSeats = true;
+    const mapNavigation = new Map();
     const ICONS = {
         restroom: '<circle cx="6.5" cy="4" r="2.4" fill="currentColor"/><path d="M4 8h5v7H7.5v6h-2v-6H4z" fill="currentColor"/><circle cx="17.5" cy="4" r="2.4" fill="currentColor"/><path d="M17.5 8l3.5 8h-2v5h-3v-5h-2z" fill="currentColor"/><path d="M12 3v18" fill="none" stroke="currentColor" stroke-width="2"/>',
         man: '<circle cx="12" cy="4" r="2.4" fill="currentColor"/><path d="M8.5 8h7v7h-2v7h-3v-7h-2z" fill="currentColor"/>',
@@ -9900,6 +9905,12 @@ async function getAvailableCount(chartId, categoryName, areaLabel) {
     const svgEl = (name, attrs, parent) => { const n = document.createElementNS(NS, name); Object.entries(attrs || {}).forEach(([k, v]) => { if (v !== undefined && v !== null) n.setAttribute(k, String(v)) }); if (parent) parent.appendChild(n); return n; };
     const text = (parent, x, y, str, attrs = {}) => { const n = svgEl('text', { x, y, 'dominant-baseline': 'auto', ...attrs }, parent); n.textContent = str == null ? '' : String(str); return n; };
     const catMap = (cats, id) => cats.find(c => String(c.id) === String(id)) || { color: '#888', name: '—' };
+    const seatColor = (status, fallback) => {
+        const value = String(status || 'available').toLowerCase();
+        if (['sold', 'booked', 'reserved'].includes(value)) return '#8992a7';
+        if (value === 'notforsale') return '#bfa692';
+        return fallback;
+    };
     const seatNo = (st, k) => { st = String(st == null ? '1' : st).trim() || '1'; const m = /^(.*?)(\d+)$/.exec(st); if (m) return m[1] + String(+m[2] + k).padStart(m[2].length > 1 && m[2][0] === '0' ? m[2].length : 0, '0'); return /^\d+$/.test(st) ? String(+st + k) : st.slice(0, -1) + String.fromCharCode(st.toUpperCase().charCodeAt(st.length - 1) + k); };
     function polySeats(pts, n) { const seg = [], lens = []; let total = 0; for (let i = 1; i < pts.length; i++) { const l = Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y); seg.push(l); total += l } const count = n ?? Math.floor(total / SP) + 1, out = []; let si = 0, acc = 0; for (let i = 0; i < count; i++) { const d = i * SP; while (si < seg.length - 1 && d > acc + seg[si]) { acc += seg[si]; si++ } const a = pts[si], b = pts[si + 1] || pts[si], l = seg[si] || 1, t = (d - acc) / l; out.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }) } return out; }
     function rowSeats(s) { if (s.pts) return { p: polySeats(s.pts, s.count).map((p, i) => ({ ...p, l: seatNo(s.start, s.dir === 'rtl' ? s.count - 1 - i : i) })), cx: 0, cy: 0 }; const dx = s.x2 - s.x1, dy = s.y2 - s.y1, len = Math.hypot(dx, dy) || 1, mx = (s.x1 + s.x2) / 2 + (-dy / len) * (s.curve || 0) * 2, my = (s.y1 + s.y2) / 2 + (dx / len) * (s.curve || 0) * 2, p = []; for (let i = 0; i < s.count; i++) { const t = s.count > 1 ? i / (s.count - 1) : 0, u = 1 - t, k = s.dir === 'rtl' ? s.count - 1 - i : i; p.push({ x: u * u * s.x1 + 2 * u * t * mx + t * t * s.x2, y: u * u * s.y1 + 2 * u * t * my + t * t * s.y2, l: seatNo(s.start, k) }) } return { p, cx: mx, cy: my }; }
@@ -9916,13 +9927,13 @@ async function getAvailableCount(chartId, categoryName, areaLabel) {
             const c = catMap(cats, s.cat).color, cc = center(s), g = svgEl('g', { transform: `rotate(${s.rot || 0} ${cc.x} ${cc.y})` }, svg);
             if (s.type === 'row') {
                 const q = rowSeats(s); q.p.forEach((p, i) => {
-                    const sd = (s.sd && s.sd[i]) || {}, seatName = (s.label || '') + '-' + (sd.label || p.l), db = seatLookup.get(seatName), cat = catMap(cats, sd.cat || s.cat), fill = cat.color, seatLabel = sd.label || p.l; const circle = svgEl('circle', { cx: p.x, cy: p.y, r: R, fill, stroke: '#fff', 'stroke-width': 1.5, 'data-seat': seatName, tabindex: 0, 'aria-label': `Row ${s.label || ''}, seat ${seatLabel}, ${cat.name}${db?.status ? ', ' + db.status : ''}` }, g); const tip = { type: 'Row', section: s.label || s.section || '', seat: seatLabel, category: cat.name, catId: cat.id, color: cat.color, status: db?.status || '', notes: seatAccNotes(sd), props: sd }; circle.addEventListener('mouseenter', e => showTip(host, tip, e)); circle.addEventListener('mouseleave', hideTip); circle.addEventListener('focus', e => showTip(host, tip, e)); circle.addEventListener('blur', hideTip); const hasAcc = sd.acc && SI[sd.acc], fk = FLAGS.filter(k => sd[k]);
+                    const sd = (s.sd && s.sd[i]) || {}, seatName = (s.label || '') + '-' + (sd.label || p.l), db = seatLookup.get(seatName), cat = catMap(cats, sd.cat || s.cat), fill = seatColor(db?.status, cat.color), seatLabel = sd.label || p.l; const circle = svgEl('circle', { cx: p.x, cy: p.y, r: R, fill, 'data-base-fill': cat.color, stroke: '#fff', 'stroke-width': 1.5, 'data-seat': seatName, 'data-status': db?.status || 'available', tabindex: 0, 'aria-label': `Row ${s.label || ''}, seat ${seatLabel}, ${cat.name}${db?.status ? ', ' + db.status : ''}` }, g); const tip = { type: 'Row', section: s.label || s.section || '', seat: seatLabel, category: cat.name, catId: cat.id, color: cat.color, status: db?.status || '', notes: seatAccNotes(sd), props: sd }; circle.addEventListener('mouseenter', e => showTip(host, tip, e)); circle.addEventListener('mouseleave', hideTip); circle.addEventListener('focus', e => showTip(host, tip, e)); circle.addEventListener('blur', hideTip); const hasAcc = sd.acc && SI[sd.acc], fk = FLAGS.filter(k => sd[k]);
                     if (hasAcc) svgEl('g', { style: 'color:#fff', transform: `translate(${p.x - 7} ${p.y - 7}) scale(${14 / 24})`, 'pointer-events': 'none' }, g).innerHTML = SI[sd.acc];
                     else if (showSeats) text(g, p.x, p.y + 3, sd.label || p.l, { 'text-anchor': 'middle', 'font-size': 8, 'font-weight': 600, fill: '#fff', 'pointer-events': 'none' });
                     if (fk.length) { const bx = p.x + R - 1, by = p.y - R + 1; svgEl('circle', { cx: bx, cy: by, r: 5.6, fill: '#f59e0b', stroke: '#fff', 'stroke-width': 1.2, 'pointer-events': 'none' }, g); if (fk.length === 1) svgEl('g', { style: 'color:#fff', transform: `translate(${bx - 3.6} ${by - 3.6}) scale(${7.2 / 24})`, 'pointer-events': 'none' }, g).innerHTML = SI[fk[0]]; else text(g, bx, by + 3, fk.length, { 'text-anchor': 'middle', 'font-size': 8, 'font-weight': 700, fill: '#fff', 'pointer-events': 'none' }); }
                 }); const l = q.p[0].x <= q.p[q.p.length - 1].x ? q.p[0] : q.p[q.p.length - 1]; if (showRows && s.lblOn !== false) text(g, l.x - 22, l.y + 4, s.label, { 'text-anchor': 'middle', 'font-size': 12, 'font-weight': 700, fill: '#64708f' });
             }
-            else if (s.type === 'table') { const tableFill = c + '33', stroke = c; if (s.shape === 'rect') svgEl('rect', { x: s.x - s.w / 2, y: s.y - s.h / 2, width: s.w, height: s.h, rx: 8, fill: tableFill, stroke, 'stroke-width': 1.5 }, g); else svgEl('circle', { cx: s.x, cy: s.y, r: s.r, fill: tableFill, stroke, 'stroke-width': 1.5 }, g); tableSeats(s).forEach((p, i) => { const cat = catMap(cats, s.cat), seatName = (s.label || 'T') + '-' + (i + 1), db = seatLookup.get(seatName), tip = { type: 'Table', section: s.label || '—', seat: String(i + 1), category: cat.name, catId: cat.id, color: cat.color, status: db?.status || '', notes: [] }; const el = svgEl('circle', { cx: p.x, cy: p.y, r: R, fill: cat.color, stroke: '#fff', 'stroke-width': 1.5, tabindex: 0, 'data-seat': seatName, 'aria-label': `Table ${s.label || ''}, seat ${i + 1}, ${cat.name}${db?.status ? ', ' + db.status : ''}` }, g); el.addEventListener('mouseenter', e => showTip(host, tip, e)); el.addEventListener('mouseleave', hideTip); el.addEventListener('focus', e => showTip(host, tip, e)); el.addEventListener('blur', hideTip); if (showSeats) text(g, p.x, p.y + 3, String(i + 1), { 'text-anchor': 'middle', 'font-size': 8, 'font-weight': 600, fill: '#fff', 'pointer-events': 'none' }); }); text(g, s.x, s.y + 4, s.label, { 'text-anchor': 'middle', 'font-size': 13, 'font-weight': 700, fill: '#1e2540' }); }
+            else if (s.type === 'table') { const tableFill = c + '33', stroke = c; if (s.shape === 'rect') svgEl('rect', { x: s.x - s.w / 2, y: s.y - s.h / 2, width: s.w, height: s.h, rx: 8, fill: tableFill, stroke, 'stroke-width': 1.5 }, g); else svgEl('circle', { cx: s.x, cy: s.y, r: s.r, fill: tableFill, stroke, 'stroke-width': 1.5 }, g); tableSeats(s).forEach((p, i) => { const cat = catMap(cats, s.cat), seatName = (s.label || 'T') + '-' + (i + 1), db = seatLookup.get(seatName), tip = { type: 'Table', section: s.label || '—', seat: String(i + 1), category: cat.name, catId: cat.id, color: cat.color, status: db?.status || '', notes: [] }; const el = svgEl('circle', { cx: p.x, cy: p.y, r: R, fill: seatColor(db?.status, cat.color), 'data-base-fill': cat.color, stroke: '#fff', 'stroke-width': 1.5, 'data-seat': seatName, 'data-status': db?.status || 'available', tabindex: 0, 'aria-label': `Table ${s.label || ''}, seat ${i + 1}, ${cat.name}${db?.status ? ', ' + db.status : ''}` }, g); el.addEventListener('mouseenter', e => showTip(host, tip, e)); el.addEventListener('mouseleave', hideTip); el.addEventListener('focus', e => showTip(host, tip, e)); el.addEventListener('blur', hideTip); if (showSeats) text(g, p.x, p.y + 3, String(i + 1), { 'text-anchor': 'middle', 'font-size': 8, 'font-weight': 600, fill: '#fff', 'pointer-events': 'none' }); }); text(g, s.x, s.y + 4, s.label, { 'text-anchor': 'middle', 'font-size': 13, 'font-weight': 700, fill: '#1e2540' }); }
             else if (s.type === 'icon') { const ig = svgEl('g', { transform: `translate(${s.x - s.size / 2} ${s.y - s.size / 2}) scale(${s.size / 24})`, style: `color:${s.color || '#1e2540'}` }, g); ig.innerHTML = ICONS[s.ic] || ''; }
             else if (s.type === 'line') { const dx = s.x2 - s.x1, dy = s.y2 - s.y1, len = Math.hypot(dx, dy) || 1, ux = dx / len, uy = dy / len, hs = 6 + (s.w || 3) * 2; svgEl('line', { x1: s.x1, y1: s.y1, x2: s.arrow ? s.x2 - ux * hs * .6 : s.x2, y2: s.arrow ? s.y2 - uy * hs * .6 : s.y2, stroke: s.color || '#1e2540', 'stroke-width': s.w || 3, 'stroke-dasharray': s.dash || '0' }, g); if (s.arrow) svgEl('polygon', { points: `${s.x2},${s.y2} ${s.x2 - ux * hs - uy * hs * .5},${s.y2 - uy * hs + ux * hs * .5} ${s.x2 - ux * hs + uy * hs * .5},${s.y2 - uy * hs - ux * hs * .5}`, fill: s.color || '#1e2540' }, g); }
             else if (s.type === 'text') text(g, s.x, s.y, s.text || 'Text', { 'font-size': s.size || 18, 'font-weight': 600, fill: s.color || '#1e2540' });
@@ -9944,7 +9955,106 @@ async function getAvailableCount(chartId, categoryName, areaLabel) {
     function showLoader(id) { const h = document.getElementById(id); if (!h) return; if (!document.getElementById('chartPreviewLoaderStyle')) { const st = document.createElement('style'); st.id = 'chartPreviewLoaderStyle'; st.textContent = '.cp-loader{position:absolute;inset:0;min-height:300px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#fff;font:600 13px system-ui,sans-serif;color:#6b7694}.cp-loader i{width:40px;height:40px;border:4px solid #e4e8f2;border-top-color:#4f46e5;border-radius:50%;animation:cpSpin .8s linear infinite}@keyframes cpSpin{to{transform:rotate(360deg)}}'; document.head.appendChild(st) } h.style.position = 'relative'; hideLoader(id); const l = document.createElement('div'); l.className = 'cp-loader'; l.innerHTML = '<i></i><span>Loading chart…</span>'; h.appendChild(l) }
     function hideLoader(id) { const h = document.getElementById(id); if (h) h.querySelectorAll('.cp-loader').forEach(x => x.remove()) }
     function hideTip() { hideTooltip() }
-    global.chartPreviewRenderer = { render, showLoader, hideLoader, toggleRowLabels() { showRows = !showRows; if (lastRender) render(lastRender.containerId, lastRender.chartJson, lastRender.seatsJson); return showRows; }, toggleSeatLabels() { showSeats = !showSeats; if (lastRender) render(lastRender.containerId, lastRender.chartJson, lastRender.seatsJson); return showSeats; } };
+    function readViewBox(svg) { return (svg.getAttribute('viewBox') || '0 0 1 1').trim().split(/[ ,]+/).map(Number); }
+    function writeViewBox(svg, box) { svg.setAttribute('viewBox', box.join(' ')); }
+    function zoomMap(state, factor) {
+        if (!state || !state.svg || !Number.isFinite(factor) || factor <= 0) return;
+        const box = readViewBox(state.svg), initial = state.initialViewBox;
+        const width = Math.max(initial[2] / 8, Math.min(initial[2] * 2, box[2] / factor));
+        const height = width * box[3] / box[2];
+        writeViewBox(state.svg, [box[0] + (box[2] - width) / 2, box[1] + (box[3] - height) / 2, width, height]);
+    }
+    function enableMapNavigation(containerId) {
+        const host = document.getElementById(containerId), svg = host && host.querySelector('svg');
+        if (!host || !svg) return;
+        let state = mapNavigation.get(containerId);
+        if (!state) {
+            state = { svg: null, initialViewBox: null, defaultViewBox: null, pointerId: null, startX: 0, startY: 0, startViewBox: null, dragging: false };
+            mapNavigation.set(containerId, state);
+            host.addEventListener('pointerdown', event => {
+                if (!state.svg || event.button > 0) return;
+                state.pointerId = event.pointerId;
+                state.startX = event.clientX;
+                state.startY = event.clientY;
+                state.startViewBox = readViewBox(state.svg);
+                state.dragging = false;
+            });
+            host.addEventListener('pointermove', event => {
+                if (state.pointerId !== event.pointerId || !state.svg) return;
+                const dx = event.clientX - state.startX, dy = event.clientY - state.startY;
+                if (!state.dragging && Math.hypot(dx, dy) < 4) return;
+                if (!state.dragging) {
+                    state.dragging = true;
+                    if (host.setPointerCapture) host.setPointerCapture(event.pointerId);
+                    host.style.cursor = 'grabbing';
+                }
+                const rect = host.getBoundingClientRect(), box = state.startViewBox;
+                writeViewBox(state.svg, [box[0] - dx * box[2] / rect.width, box[1] - dy * box[3] / rect.height, box[2], box[3]]);
+                event.preventDefault();
+            });
+            const finishPan = event => {
+                if (state.pointerId !== event.pointerId) return;
+                if (state.dragging) host.dataset.panSuppressUntil = String(Date.now() + 300);
+                state.pointerId = null;
+                state.dragging = false;
+                host.style.cursor = 'grab';
+                if (host.hasPointerCapture && host.hasPointerCapture(event.pointerId)) host.releasePointerCapture(event.pointerId);
+            };
+            host.addEventListener('pointerup', finishPan);
+            host.addEventListener('pointercancel', finishPan);
+            host.addEventListener('wheel', event => {
+                if (!state.svg) return;
+                event.preventDefault();
+                zoomMap(state, Math.exp(-event.deltaY * 0.001));
+            }, { passive: false });
+        }
+        state.svg = svg;
+        state.initialViewBox = readViewBox(svg);
+        const [x, y, width, height] = state.initialViewBox;
+        const startZoom = window.matchMedia('(max-width: 600px)').matches ? 2.5 : 1;
+        const startWidth = width / startZoom, startHeight = height / startZoom;
+        state.defaultViewBox = [x + (width - startWidth) / 2, y + (height - startHeight) / 2, startWidth, startHeight];
+        writeViewBox(svg, state.defaultViewBox);
+        host.style.cursor = 'grab';
+    }
+    global.chartPreviewRenderer = { render, showLoader, hideLoader, enableNavigation: enableMapNavigation, zoom(containerId, factor) { zoomMap(mapNavigation.get(containerId), factor); }, resetZoom(containerId) { const state = mapNavigation.get(containerId); if (state && state.svg) writeViewBox(state.svg, state.defaultViewBox); }, toggleRowLabels() { showRows = !showRows; if (lastRender) render(lastRender.containerId, lastRender.chartJson, lastRender.seatsJson); return showRows; }, toggleSeatLabels() { showSeats = !showSeats; if (lastRender) render(lastRender.containerId, lastRender.chartJson, lastRender.seatsJson); return showSeats; } };
+    const seatMapHandlers = new Map();
+    global.seatManagementInterop = {
+        bindChart(containerId, dotNetHelper) {
+            const host = document.getElementById(containerId);
+            if (!host) throw new Error(`Seat map '${containerId}' was not found.`);
+            const previousHandler = seatMapHandlers.get(containerId);
+            if (previousHandler) host.removeEventListener('click', previousHandler);
+            const handler = event => {
+                if (Number(host.dataset.panSuppressUntil || 0) > Date.now()) return;
+                const target = event.target.closest('circle[data-seat]');
+                if (target && host.contains(target)) dotNetHelper.invokeMethodAsync('ToggleSeatSelection', target.getAttribute('data-seat'));
+            };
+            host.addEventListener('click', handler);
+            seatMapHandlers.set(containerId, handler);
+        },
+        setSelectedSeats(containerId, seatNames) {
+            const host = document.getElementById(containerId);
+            if (!host) return;
+            const selected = new Set(seatNames || []);
+            host.querySelectorAll('circle[data-seat]').forEach(seat => {
+                const isSelected = selected.has(seat.getAttribute('data-seat'));
+                seat.classList.toggle('manage-seat-selected', isSelected);
+                const baseFill = seat.getAttribute('data-base-fill');
+                const status = seat.getAttribute('data-status');
+                seat.setAttribute('fill', isSelected ? '#f59e0b' : seatColor(status, baseFill));
+                seat.setAttribute('stroke', isSelected ? '#b45309' : '#fff');
+                seat.setAttribute('stroke-width', isSelected ? '3' : '1.5');
+                seat.setAttribute('aria-pressed', String(isSelected));
+            });
+        },
+        unbindChart(containerId) {
+            const host = document.getElementById(containerId);
+            const handler = seatMapHandlers.get(containerId);
+            if (host && handler) host.removeEventListener('click', handler);
+            seatMapHandlers.delete(containerId);
+        }
+    };
 })(window);
 
 /* Keep the chart sharp when the browser zoom or screen density changes after load. */

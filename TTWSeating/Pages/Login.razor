@@ -388,18 +388,59 @@
         }
     }
 
+    @@media (max-width: 600px) {
+        body {
+            height: auto;
+            min-height: 100vh;
+            min-height: 100dvh;
+            align-items: flex-start;
+            padding: 12px;
+        }
+
+        .terracotta-login {
+            width: 100%;
+            max-width: 480px;
+            height: auto;
+            max-height: none;
+            margin: 0 auto;
+            border-radius: 18px;
+        }
+
+        .login-left {
+            padding: 24px 20px;
+        }
+
+        .login-left .brand-logo {
+            width: min(100%, 220px);
+            margin-bottom: 12px;
+        }
+
+        .login-left .features {
+            margin-top: 18px;
+            gap: 8px;
+        }
+
+        .login-right {
+            padding: 22px 20px;
+        }
+    }
+
     @@media (max-width: 480px) {
-        .login-left .subtitle {
-            font-size: 14px;
-        }
+        .login-left { padding: 20px 16px; }
+        .login-left .subtitle { font-size: 13px; }
+        .login-left .features { max-width: none; }
+        .login-left .features .feature-item { gap: 9px; font-size: 12px; }
+        .login-left .features .feature-item i { font-size: 15px; padding: 5px; }
+        .login-right { padding: 20px 16px; }
+        .login-card { max-width: 100%; padding: 0; }
+        .login-title { font-size: 20px; }
+        .input-group input, .login-btn { min-height: 44px; }
+    }
 
-        .login-card {
-            padding: 0;
-        }
-
-        .login-title {
-            font-size: 20px;
-        }
+    @@media (max-width: 360px) {
+        body { padding: 8px; }
+        .login-left { padding: 18px 12px; }
+        .login-right { padding: 18px 12px; }
     }
 </style>
 

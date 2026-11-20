@@ -1,3 +1,4 @@
+
 <aside class="sq-side">
     <div class="sq-brand">
         <img class="sq-brand-logo" src="images/seatsq-logo.png" alt="SeatsQ" />
@@ -6,6 +7,10 @@
         <button type="button" class="sq-nav-item @(ActiveView == "charts" ? "active" : "")" @onclick='() => ViewChanged.InvokeAsync("charts")'>
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="2"></rect><rect x="14" y="3" width="7" height="7" rx="2"></rect><rect x="3" y="14" width="7" height="7" rx="2"></rect><rect x="14" y="14" width="7" height="7" rx="2"></rect></svg>
             Charts
+        </button>
+        <button type="button" class="sq-nav-item @(ActiveView == "seats" ? "active" : "")" @onclick='() => ViewChanged.InvokeAsync("seats")' title="Manage seats">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 11V5a2 2 0 0 1 4 0v6"></path><path d="M9 10V4a2 2 0 0 1 4 0v7"></path><path d="M13 11V6a2 2 0 0 1 4 0v8l-1.6 5H7l-2-5v-3a2 2 0 0 1 4 0v1"></path></svg>
+            Manage Seats
         </button>
         <button type="button" class="sq-nav-item @(ActiveView == "settings" ? "active" : "")" @onclick='() => ViewChanged.InvokeAsync("settings")'>
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.7 1.7-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5v.2h-2.4v-.2a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1L8 17l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H6.7v-2.4h.2a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9L8 8.6l1.7-1.7.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.5v-.2h2.4v.2a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1 1.7 1.7-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.5 1h.2V14h-.2a1.7 1.7 0 0 0-1.5 1z"></path></svg>

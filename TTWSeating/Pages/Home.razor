@@ -3179,6 +3179,50 @@
     .sq-page .sq-tip-text {
         font-size: 11.5px;
     }
+
+    @@media (max-width: 760px) {
+        .sq-page { min-height: 100vh; }
+        .sq-shell {
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 14px;
+            width: 100%;
+            padding: 12px;
+        }
+
+        .sq-side { width: 100%; }
+        .sq-content, .sq-dashboard-body, .sq-dashboard-main, .sq-dashboard-rail { width: 100%; min-width: 0; }
+        .sq-dashboard-body { grid-template-columns: minmax(0, 1fr); }
+        .sq-dashboard-rail { display: grid; grid-template-columns: minmax(0, 1fr); }
+        .sq-header { align-items: stretch; }
+        .sq-header-actions { flex: 1 1 100%; width: 100%; min-width: 0; }
+        .sq-header-actions .sq-search { flex: 1 1 100%; max-width: none; }
+        .sq-chart-grid:not(.list) { grid-template-columns: minmax(0, 1fr); }
+    }
+
+    @@media (max-width: 520px) {
+        .sq-shell { gap: 12px; padding: 9px; }
+        .sq-content, .sq-dashboard-main, .sq-dashboard-rail { gap: 12px; }
+        .sq-header { gap: 8px; }
+        .sq-header-title { font-size: 22px; }
+        .sq-header-actions { column-gap: 8px; row-gap: 8px; }
+        .sq-header-actions .sq-search { flex-basis: 100%; height: 42px; }
+        .sq-header-actions .sq-create { flex: 1 1 auto; }
+        .sq-section { padding: 12px; border-radius: 14px; }
+        .sq-chart-grid:not(.list) { grid-template-columns: minmax(0, 1fr); }
+        .sq-toolbar { align-items: stretch; }
+        .sq-toolbar .sq-select-wrap { flex: 1 1 calc(50% - 8px); min-width: 0; }
+        .sq-toolbar .sq-select-wrap select { width: 100%; max-width: none; }
+        .sq-key-row { flex-wrap: wrap; }
+        .sq-key-value { flex-basis: 100%; order: 1; overflow-wrap: anywhere; }
+    }
+
+    @@media (max-width: 360px) {
+        .sq-shell { padding: 7px; }
+        .sq-side .sq-nav-item { min-width: 0; padding: 7px 6px; gap: 6px; font-size: 10px; }
+        .sq-header-icon { display: none; }
+    }
 </style>
 
 <div class="sq-page">
@@ -3580,6 +3624,8 @@
     private HashSet<string> favorites = new();
 
     public string ChartId { get; set; } = "0";
+    [SupplyParameterFromQuery(Name = "view")]
+    public string? ViewFromQuery { get; set; }
     public DataSet Charts { get; set; } = new DataSet();
 
     private IEnumerable<DataRow> ChartRows =>
@@ -3643,6 +3689,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        activeView = string.Equals(ViewFromQuery, "settings", StringComparison.OrdinalIgnoreCase) ? "settings" : "charts";
         var result = await localStorage.GetAsync<string>("UserEmail");
         if (result.Success) UserEmail = result.Value;
 
@@ -3716,9 +3763,15 @@
 
     private void SetView(string view)
     {
-        activeView = view;
         showDropdown = false;
         secretVisible = false;
+        if (view == "seats")
+        {
+            NavManager.NavigateTo("manageseats");
+            return;
+        }
+
+        activeView = view;
     }
 
     private void ShowAllCharts()
