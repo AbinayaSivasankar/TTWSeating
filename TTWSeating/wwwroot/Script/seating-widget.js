@@ -36,32 +36,28 @@ let rowBaseline = null;
 let lastRowPosition = null;
 
 function findGeneralAreaAtPointer(canvas, event, target, subTargets) {
+    if (!event) return null;
     const objects = canvas.getObjects();
+    const pointer = canvas.getPointer(event);
+    const point = new fabric.Point(pointer.x, pointer.y);
+    const containsPointer = area => typeof area.containsPoint === 'function' && area.containsPoint(point);
     const candidates = [target, ...(subTargets || [])].filter(Boolean);
     for (const candidate of candidates) {
         const objectType = candidate.objectType || (candidate.get && candidate.get('objectType'));
-        if (objectType === 'genrectangle') return candidate;
+        if (objectType === 'genrectangle' && containsPointer(candidate)) return candidate;
         const rectangleId = candidate.rectangleId || (candidate.get && candidate.get('rectangleId'));
         if (rectangleId) {
             const linkedArea = objects.find(obj => {
                 const type = obj.objectType || (obj.get && obj.get('objectType'));
                 const id = obj.rectangleId || (obj.get && obj.get('rectangleId'));
-                return type === 'genrectangle' && id === rectangleId;
+                return type === 'genrectangle' && id === rectangleId && containsPointer(obj);
             });
             if (linkedArea) return linkedArea;
         }
     }
-    if (!event) return null;
-    const pointer = canvas.getPointer(event);
-    const point = new fabric.Point(pointer.x, pointer.y);
     return objects.slice().reverse().find(obj => {
         const objectType = obj.objectType || (obj.get && obj.get('objectType'));
-        if (objectType !== 'genrectangle') return false;
-        if (obj.containsPoint(point)) return true;
-        if (obj.type === 'polygon') return false;
-        const bounds = obj.getBoundingRect();
-        return pointer.x >= bounds.left && pointer.x <= bounds.left + bounds.width &&
-            pointer.y >= bounds.top && pointer.y <= bounds.top + bounds.height;
+        return objectType === 'genrectangle' && containsPointer(obj);
     }) || null;
 }
 
@@ -1325,11 +1321,13 @@ window.fabricInterop = {
 
         // Updated mouse:down handler with ticket type popup
         canvas.on("mouse:down", (opt) => {
-            let seat = opt.target;
-            const targetType = seat && (seat.objectType || (seat.get && seat.get('objectType')));
-            const generalArea = targetType === 'genrectangle' ? seat : findGeneralAreaAtPointer(canvas, opt.e, seat, opt.subTargets);
-            if (generalArea) seat = generalArea;
+            const generalArea = findGeneralAreaAtPointer(canvas, opt.e, opt.target, opt.subTargets);
+            if (generalArea) {
+                this.handleGenRectangleSelection(canvasId, generalArea, opt.e, this._chartId);
+                return;
+            }
 
+            let seat = opt.target;
             if (!seat) {
                 // Check if click was on a seat at this position (for row labels or empty space)
                 const pointer = canvas.getPointer(opt.e);
@@ -1399,9 +1397,6 @@ window.fabricInterop = {
 
                 // Show ticket type popup
                 this.showTicketTypePopup(canvasId, seat, priceObj);
-
-            } else if (seat.objectType === 'genrectangle') {
-                this.handleGenRectangleSelection(canvasId, seat, opt.e, this._chartId);
             }
         });
     },
@@ -7982,9 +7977,7 @@ window.fabricInterop = {
         });
 
         canvas.on("mouse:down", (opt) => {
-            const target = opt.target;
-            const objectType = target && (target.objectType || (target.get && target.get('objectType')));
-            const area = objectType === 'genrectangle' ? target : findGeneralAreaAtPointer(canvas, opt.e, target, opt.subTargets);
+            const area = findGeneralAreaAtPointer(canvas, opt.e, opt.target, opt.subTargets);
             if (area) this.handleGenRectangleSelection(canvasId, area, opt.e, ChartId);
         });
     },
