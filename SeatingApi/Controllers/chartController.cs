@@ -66,10 +66,23 @@ namespace SeatingApi.Controllers
         {
             return chartRepository.UpdateHoldSeats(chartId);
         }
-        [HttpPost("ReleaseSeats")]
-        public string ReleaseSeats(string chartId, string seats)
+        //[HttpPost("ReleaseSeats")]
+        //public string ReleaseSeats(string chartId, string seats)
+        //{
+        //    return chartRepository.ReleaseSeats(chartId, seats);
+        //}
+
+
+        public class ReleaseSeatsRequest
         {
-            return chartRepository.ReleaseSeats(chartId, seats);
+            public string ChartId { get; set; }
+            public string Seats { get; set; }
+        }
+
+        [HttpPost("ReleaseSeats")]
+        public string ReleaseSeats([FromBody] ReleaseSeatsRequest model)
+        {
+            return chartRepository.ReleaseSeats(model.ChartId, model.Seats);
         }
         [HttpGet("GetCount")]
         public string GetGaAvailCount(string chartId, string catname, string areaLabel = null)
